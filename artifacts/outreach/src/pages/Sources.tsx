@@ -19,11 +19,33 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { getListLeadsQueryKey } from "@workspace/api-client-react";
 
+interface ScraperStatus {
+  configured: boolean;
+  status?: "active" | "expired" | "absent";
+  lastError?: string | null;
+}
+
 interface SourcesStatus {
   apollo: { configured: boolean };
   csv: { configured: boolean };
-  apolloScraper: { configured: boolean };
-  linkedinScraper: { configured: boolean };
+  apolloScraper: ScraperStatus;
+  linkedinScraper: ScraperStatus;
+}
+
+function CredentialBanner({ scraper }: { scraper: ScraperStatus | undefined }) {
+  if (!scraper || scraper.status !== "expired") return null;
+  return (
+    <div className="rounded-md bg-red-50 border border-red-200 p-3 mb-3 flex items-start gap-2">
+      <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+      <div className="text-xs text-red-900">
+        <strong>Cookies expirés.</strong> Reconnectez-vous au service, exportez à nouveau vos
+        cookies et ré-importez-les ci-dessous pour relancer les scrapings.
+        {scraper.lastError && (
+          <div className="mt-1 font-mono text-[10px] opacity-70">{scraper.lastError}</div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 interface ImportResult {
@@ -302,6 +324,7 @@ export default function Sources() {
 
       {/* Apollo Scraper */}
       <section className="bg-card border border-border rounded-lg p-6 mb-6">
+        <CredentialBanner scraper={status?.apolloScraper} />
         <div className="flex items-start gap-3 mb-4">
           <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
             <Database className="w-5 h-5 text-indigo-600" />
@@ -310,8 +333,10 @@ export default function Sources() {
             <h2 className="text-base font-semibold">Scraper Apollo (session navigateur)</h2>
             <p className="text-sm text-muted-foreground">
               Contourne les limites du plan gratuit en réutilisant votre session connectée.
-              {status?.apolloScraper.configured ? (
-                <span className="text-green-600 ml-1">Cookies enregistrés.</span>
+              {status?.apolloScraper.status === "expired" ? (
+                <span className="text-red-600 ml-1">Cookies expirés — reconnectez-vous.</span>
+              ) : status?.apolloScraper.configured ? (
+                <span className="text-green-600 ml-1">Cookies actifs.</span>
               ) : (
                 <span className="text-amber-600 ml-1">Cookies manquants.</span>
               )}
@@ -387,7 +412,7 @@ export default function Sources() {
 
         <Button
           onClick={startApolloScrape}
-          disabled={!status?.apolloScraper.configured}
+          disabled={status?.apolloScraper.status !== "active"}
           variant="outline"
         >
           <Search className="w-4 h-4 mr-2" />
@@ -397,6 +422,7 @@ export default function Sources() {
 
       {/* LinkedIn Scraper */}
       <section className="bg-card border border-border rounded-lg p-6 mb-6">
+        <CredentialBanner scraper={status?.linkedinScraper} />
         <div className="flex items-start gap-3 mb-4">
           <div className="w-10 h-10 rounded-lg bg-sky-50 flex items-center justify-center flex-shrink-0">
             <Linkedin className="w-5 h-5 text-sky-600" />
@@ -405,8 +431,10 @@ export default function Sources() {
             <h2 className="text-base font-semibold">Scraper LinkedIn (session navigateur)</h2>
             <p className="text-sm text-muted-foreground">
               Identifie les décideurs depuis la recherche LinkedIn People.
-              {status?.linkedinScraper.configured ? (
-                <span className="text-green-600 ml-1">Cookies enregistrés.</span>
+              {status?.linkedinScraper.status === "expired" ? (
+                <span className="text-red-600 ml-1">Cookies expirés — reconnectez-vous.</span>
+              ) : status?.linkedinScraper.configured ? (
+                <span className="text-green-600 ml-1">Cookies actifs.</span>
               ) : (
                 <span className="text-amber-600 ml-1">Cookies manquants.</span>
               )}
@@ -482,7 +510,7 @@ export default function Sources() {
 
         <Button
           onClick={startLinkedInScrape}
-          disabled={!status?.linkedinScraper.configured}
+          disabled={status?.linkedinScraper.status !== "active"}
           variant="outline"
         >
           <Search className="w-4 h-4 mr-2" />

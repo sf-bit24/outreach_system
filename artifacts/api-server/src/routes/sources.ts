@@ -169,7 +169,16 @@ router.post("/sources/scraper/credentials", async (req, res): Promise<void> => {
   if (existing[0]) {
     await db
       .update(scrapingCredentialsTable)
-      .set({ encryptedPayload: payload, label, lastError: null })
+      .set({
+        encryptedPayload: payload,
+        label,
+        // Re-imported cookies must reset the lifecycle: clear any previous
+        // expired/error state so the worker accepts them again.
+        status: "active",
+        lastError: null,
+        lastValidatedAt: null,
+        updatedAt: new Date(),
+      })
       .where(eq(scrapingCredentialsTable.id, existing[0].id));
     res.json({ id: existing[0].id, provider, updated: true });
     return;
