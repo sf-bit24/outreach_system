@@ -10,7 +10,8 @@ in `attached_assets/`. It is built on the pnpm monorepo template.
    - Manual entry via `/leads` page or `/api/leads`.
    - Bulk JSON import via `/api/leads/import`.
    - **CSV upload** via `/sources` page or `POST /api/sources/csv/import` (FR/EN headers supported).
-   - **Apollo.io** via `POST /api/sources/apollo/{search,match,import}` — requires `APOLLO_API_KEY`. Note: Apollo's free plan blocks both `mixed_people/search` and `people/match` (returns 403 `API_INACCESSIBLE`). The standard free workflow is to export from Apollo's web UI and import as CSV.
+   - **Apollo.io API** via `POST /api/sources/apollo/{search,match,import}` — requires `APOLLO_API_KEY`. Free plan returns 403 on search/match.
+   - **Apollo + LinkedIn scrapers** (browser-session) via `POST /api/sources/scraper/{credentials,jobs}` using Playwright + system Chromium. Cookies are AES-256-GCM-encrypted with a key derived from `SESSION_SECRET` and stored in `scraping_credentials`. Jobs run in the background (`scraping_jobs` table) with rate limits (100/h LinkedIn, 200/h Apollo) and 8-25s jitter delays. Set `SCRAPING_DRY_RUN=1` to bypass real browser calls during local testing. Scraped Apollo rows are stored with `email_status='scraped'` + `email_locked=true`; LinkedIn rows store `@example.invalid` placeholders + `email_status='needs_enrichment'`. The send guard in `pipeline/sender.ts` uses an allowlist (`null` or `'verified'` only) — anything else is hard-blocked from sending until the enrichment module verifies a real email.
 2. **Enrichment & Validation** — `/api/leads/:id/enrich` runs in parallel:
    - DNS MX-record + syntax + disposable/role validation (`pipeline/emailValidator.ts`)
    - Cheerio website scraping → summary, top keywords, visible-email check (`pipeline/websiteScraper.ts`)

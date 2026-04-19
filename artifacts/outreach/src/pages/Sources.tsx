@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Upload, Database, FileText, AlertCircle, CheckCircle2, Search } from "lucide-react";
+import {
+  Upload,
+  Database,
+  FileText,
+  AlertCircle,
+  CheckCircle2,
+  Search,
+  Linkedin,
+  Cookie,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,12 +22,34 @@ import { getListLeadsQueryKey } from "@workspace/api-client-react";
 interface SourcesStatus {
   apollo: { configured: boolean };
   csv: { configured: boolean };
+  apolloScraper: { configured: boolean };
+  linkedinScraper: { configured: boolean };
 }
 
 interface ImportResult {
   imported: number;
   skipped: number;
   errors: string[];
+}
+
+interface ScraperJob {
+  id: number;
+  provider: "apollo" | "linkedin";
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  itemsScraped: number;
+  itemsImported: number;
+  itemsSkipped: number;
+  errorMessage: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  params: Record<string, unknown>;
+}
+
+interface UsageInfo {
+  apollo: { used: number; limit: number };
+  linkedin: { used: number; limit: number };
+  windowMinutes: number;
 }
 
 const CSV_EXAMPLE = `first_name,last_name,email,company,job_title,website,location,industry
@@ -27,23 +60,59 @@ export default function Sources() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [status, setStatus] = useState<SourcesStatus | null>(null);
+  const [usage, setUsage] = useState<UsageInfo | null>(null);
+  const [jobs, setJobs] = useState<ScraperJob[]>([]);
   const [csvText, setCsvText] = useState("");
   const [importing, setImporting] = useState(false);
   const [lastResult, setLastResult] = useState<ImportResult | null>(null);
 
-  // Apollo search state
-  const [apolloKeywords, setApolloKeywords] = useState("");
-  const [apolloTitles, setApolloTitles] = useState("");
-  const [apolloLocations, setApolloLocations] = useState("Quebec, Canada");
-  const [apolloSearching, setApolloSearching] = useState(false);
-  const [apolloError, setApolloError] = useState<string | null>(null);
-  const [apolloResults, setApolloResults] = useState<any[]>([]);
+  // Scraper credential forms
+  const [apolloCookies, setApolloCookies] = useState("");
+  const [linkedinCookies, setLinkedinCookies] = useState("");
 
-  useEffect(() => {
+  // Scraper job forms
+  const [apolloScrapeKw, setApolloScrapeKw] = useState("");
+  const [apolloScrapeTitles, setApolloScrapeTitles] = useState("");
+  const [apolloScrapeLocations, setApolloScrapeLocations] = useState("Quebec, Canada");
+  const [apolloScrapeMaxPages, setApolloScrapeMaxPages] = useState(1);
+
+  const [liScrapeKw, setLiScrapeKw] = useState("");
+  const [liScrapeTitles, setLiScrapeTitles] = useState("");
+  const [liScrapeLocations, setLiScrapeLocations] = useState("");
+  const [liScrapeMax, setLiScrapeMax] = useState(25);
+
+  function refreshAll() {
     fetch(`${import.meta.env.BASE_URL}api/sources`)
       .then((r) => r.json())
       .then(setStatus)
-      .catch(() => setStatus({ apollo: { configured: false }, csv: { configured: true } }));
+      .catch(() => null);
+    fetch(`${import.meta.env.BASE_URL}api/sources/scraper/usage`)
+      .then((r) => r.json())
+      .then(setUsage)
+      .catch(() => null);
+    fetch(`${import.meta.env.BASE_URL}api/sources/scraper/jobs`)
+      .then((r) => r.json())
+      .then(setJobs)
+      .catch(() => null);
+  }
+
+  useEffect(() => {
+    refreshAll();
+    const interval = setInterval(() => {
+      // Auto-refresh jobs while any are running/queued
+      fetch(`${import.meta.env.BASE_URL}api/sources/scraper/jobs`)
+        .then((r) => r.json())
+        .then((js: ScraperJob[]) => {
+          setJobs(js);
+          if (js.some((j) => j.status === "running" || j.status === "queued")) {
+            fetch(`${import.meta.env.BASE_URL}api/sources/scraper/usage`)
+              .then((r) => r.json())
+              .then(setUsage);
+          }
+        })
+        .catch(() => null);
+    }, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   async function handleCsvImport() {
@@ -63,10 +132,7 @@ export default function Sources() {
       if (!res.ok) throw new Error(data?.error ?? "Échec d'import");
       setLastResult(data);
       qc.invalidateQueries({ queryKey: getListLeadsQueryKey() });
-      toast({
-        title: "Import terminé",
-        description: `${data.imported} importés, ${data.skipped} ignorés.`,
-      });
+      toast({ title: "Import terminé", description: `${data.imported} importés, ${data.skipped} ignorés.` });
     } catch (err) {
       toast({
         title: "Erreur d'import",
@@ -85,57 +151,90 @@ export default function Sources() {
     setCsvText(text);
   }
 
-  async function handleApolloSearch() {
-    setApolloSearching(true);
-    setApolloError(null);
-    setApolloResults([]);
-    try {
-      const res = await fetch(`${import.meta.env.BASE_URL}api/sources/apollo/search`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          keywords: apolloKeywords || undefined,
-          jobTitles: apolloTitles ? apolloTitles.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
-          locations: apolloLocations ? apolloLocations.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
-          perPage: 25,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? "Recherche échouée");
-      setApolloResults(data.people ?? []);
-    } catch (err) {
-      setApolloError(err instanceof Error ? err.message : "Recherche échouée");
-    } finally {
-      setApolloSearching(false);
+  async function saveCookies(provider: "apollo" | "linkedin", raw: string) {
+    if (!raw.trim()) {
+      toast({ title: "Cookies requis", variant: "destructive" });
+      return;
     }
-  }
-
-  async function handleApolloImportAll() {
-    if (apolloResults.length === 0) return;
-    setImporting(true);
     try {
-      const res = await fetch(`${import.meta.env.BASE_URL}api/sources/apollo/import`, {
+      const res = await fetch(`${import.meta.env.BASE_URL}api/sources/scraper/credentials`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ people: apolloResults }),
+        body: JSON.stringify({ provider, cookies: raw }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? "Import échoué");
-      qc.invalidateQueries({ queryKey: getListLeadsQueryKey() });
-      toast({
-        title: "Import Apollo terminé",
-        description: `${data.imported} importés, ${data.skipped} ignorés (emails verrouillés ou doublons).`,
-      });
-      setApolloResults([]);
+      if (!res.ok) throw new Error(data?.error ?? "Échec");
+      toast({ title: `Cookies ${provider} enregistrés (chiffrés)` });
+      if (provider === "apollo") setApolloCookies("");
+      else setLinkedinCookies("");
+      refreshAll();
     } catch (err) {
       toast({
         title: "Erreur",
-        description: err instanceof Error ? err.message : "Import échoué",
+        description: err instanceof Error ? err.message : "Erreur",
         variant: "destructive",
       });
-    } finally {
-      setImporting(false);
     }
+  }
+
+  async function clearCookies(provider: "apollo" | "linkedin") {
+    await fetch(`${import.meta.env.BASE_URL}api/sources/scraper/credentials/${provider}`, {
+      method: "DELETE",
+    });
+    toast({ title: `Cookies ${provider} supprimés` });
+    refreshAll();
+  }
+
+  async function startApolloScrape() {
+    const body = {
+      provider: "apollo",
+      keywords: apolloScrapeKw || undefined,
+      jobTitles: apolloScrapeTitles
+        ? apolloScrapeTitles.split(",").map((s) => s.trim()).filter(Boolean)
+        : undefined,
+      locations: apolloScrapeLocations
+        ? apolloScrapeLocations.split(",").map((s) => s.trim()).filter(Boolean)
+        : undefined,
+      maxPages: apolloScrapeMaxPages,
+    };
+    const res = await fetch(`${import.meta.env.BASE_URL}api/sources/scraper/jobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast({ title: "Erreur", description: data?.error ?? "Échec", variant: "destructive" });
+      return;
+    }
+    toast({ title: `Job Apollo #${data.id} en file d'attente` });
+    refreshAll();
+  }
+
+  async function startLinkedInScrape() {
+    const body = {
+      provider: "linkedin",
+      keywords: liScrapeKw || undefined,
+      jobTitles: liScrapeTitles
+        ? liScrapeTitles.split(",").map((s) => s.trim()).filter(Boolean)
+        : undefined,
+      locations: liScrapeLocations
+        ? liScrapeLocations.split(",").map((s) => s.trim()).filter(Boolean)
+        : undefined,
+      maxResults: liScrapeMax,
+    };
+    const res = await fetch(`${import.meta.env.BASE_URL}api/sources/scraper/jobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast({ title: "Erreur", description: data?.error ?? "Échec", variant: "destructive" });
+      return;
+    }
+    toast({ title: `Job LinkedIn #${data.id} en file d'attente` });
+    refreshAll();
   }
 
   return (
@@ -143,7 +242,9 @@ export default function Sources() {
       <div className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">Sources de leads</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Importez des leads depuis un fichier CSV ou via Apollo.io.
+          CSV, Apollo (API + scraping), et LinkedIn. Tous les emails douteux sont marqués
+          <code className="mx-1 text-xs bg-muted px-1.5 py-0.5 rounded">needs_enrichment</code>
+          et ne seront jamais envoyés sans vérification.
         </p>
       </div>
 
@@ -164,82 +265,60 @@ export default function Sources() {
 
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <input
-              id="csv-file"
-              type="file"
-              accept=".csv,text/csv"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
+            <input id="csv-file" type="file" accept=".csv,text/csv" onChange={handleFileUpload} className="hidden" />
             <Label
               htmlFor="csv-file"
               className="inline-flex items-center gap-2 px-3 py-2 bg-secondary text-secondary-foreground rounded-md text-sm font-medium cursor-pointer hover:bg-secondary/80"
             >
               <Upload className="w-4 h-4" /> Choisir un fichier
             </Label>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCsvText(CSV_EXAMPLE)}
-              type="button"
-            >
+            <Button variant="outline" size="sm" onClick={() => setCsvText(CSV_EXAMPLE)} type="button">
               Charger un exemple
             </Button>
           </div>
-
           <Textarea
             value={csvText}
             onChange={(e) => setCsvText(e.target.value)}
             placeholder={CSV_EXAMPLE}
-            rows={10}
+            rows={8}
             className="font-mono text-xs"
           />
-
           <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              Champs requis : prénom, nom, email, entreprise, poste.
-            </p>
+            <p className="text-xs text-muted-foreground">Champs requis : prénom, nom, email, entreprise, poste.</p>
             <Button onClick={handleCsvImport} disabled={importing || !csvText.trim()}>
               {importing ? "Import en cours…" : "Importer"}
             </Button>
           </div>
-
           {lastResult && (
-            <div className="mt-4 p-4 bg-muted/50 rounded-md text-sm">
-              <div className="flex items-center gap-2 font-medium mb-2">
+            <div className="mt-2 p-3 bg-muted/50 rounded-md text-sm">
+              <div className="flex items-center gap-2 font-medium">
                 <CheckCircle2 className="w-4 h-4 text-green-600" />
                 {lastResult.imported} leads importés, {lastResult.skipped} ignorés
               </div>
-              {lastResult.errors.length > 0 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                    Voir les {lastResult.errors.length} erreurs
-                  </summary>
-                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground max-h-48 overflow-auto">
-                    {lastResult.errors.map((e, i) => (
-                      <li key={i}>• {e}</li>
-                    ))}
-                  </ul>
-                </details>
-              )}
             </div>
           )}
         </div>
       </section>
 
-      {/* Apollo */}
-      <section className="bg-card border border-border rounded-lg p-6">
+      {/* Apollo Scraper */}
+      <section className="bg-card border border-border rounded-lg p-6 mb-6">
         <div className="flex items-start gap-3 mb-4">
           <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
             <Database className="w-5 h-5 text-indigo-600" />
           </div>
           <div className="flex-1">
-            <h2 className="text-base font-semibold">Apollo.io</h2>
+            <h2 className="text-base font-semibold">Scraper Apollo (session navigateur)</h2>
             <p className="text-sm text-muted-foreground">
-              Recherche directe dans la base Apollo. {status?.apollo.configured ? (
-                <span className="text-green-600">Clé API configurée.</span>
+              Contourne les limites du plan gratuit en réutilisant votre session connectée.
+              {status?.apolloScraper.configured ? (
+                <span className="text-green-600 ml-1">Cookies enregistrés.</span>
               ) : (
-                <span className="text-amber-600">Clé API manquante.</span>
+                <span className="text-amber-600 ml-1">Cookies manquants.</span>
+              )}
+              {usage && (
+                <span className="ml-2 text-xs">
+                  Quota : {usage.apollo.used}/{usage.apollo.limit} / heure
+                </span>
               )}
             </p>
           </div>
@@ -248,80 +327,219 @@ export default function Sources() {
         <div className="rounded-md bg-amber-50 border border-amber-200 p-3 mb-4 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="text-xs text-amber-900">
-            <strong>Plan gratuit Apollo :</strong> les endpoints Search et People Match sont
-            verrouillés. Si vous obtenez une erreur 403, exportez votre liste depuis l'interface
-            web d'Apollo (Search → Export to CSV) puis utilisez l'import CSV ci-dessus.
+            <strong>Emails verrouillés Apollo :</strong> les emails non révélés sont marqués
+            <code className="mx-1 bg-white/60 px-1 rounded">email_locked</code> et ne sont
+            <strong> jamais envoyés</strong>. Vous devez les révéler dans Apollo (crédits)
+            ou les vérifier via une autre source avant tout envoi.
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-          <div>
-            <Label className="text-xs">Mots-clés</Label>
-            <Input
-              value={apolloKeywords}
-              onChange={(e) => setApolloKeywords(e.target.value)}
-              placeholder="cabinet comptable"
+        {!status?.apolloScraper.configured ? (
+          <div className="space-y-2 mb-4">
+            <Label className="text-xs flex items-center gap-1">
+              <Cookie className="w-3 h-3" /> Cookies de session (JSON depuis EditThisCookie, ou en-tête Cookie:)
+            </Label>
+            <Textarea
+              value={apolloCookies}
+              onChange={(e) => setApolloCookies(e.target.value)}
+              rows={5}
+              className="font-mono text-xs"
+              placeholder='[{"name":"_apollo_session","value":"...","domain":".apollo.io"}, ...]'
             />
-          </div>
-          <div>
-            <Label className="text-xs">Titres (séparés par virgule)</Label>
-            <Input
-              value={apolloTitles}
-              onChange={(e) => setApolloTitles(e.target.value)}
-              placeholder="CEO, Founder, CPA"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Localisations (séparées par virgule)</Label>
-            <Input
-              value={apolloLocations}
-              onChange={(e) => setApolloLocations(e.target.value)}
-              placeholder="Quebec, Canada"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleApolloSearch}
-            disabled={apolloSearching || !status?.apollo.configured}
-            variant="outline"
-          >
-            <Search className="w-4 h-4 mr-2" />
-            {apolloSearching ? "Recherche…" : "Rechercher"}
-          </Button>
-          {apolloResults.length > 0 && (
-            <Button onClick={handleApolloImportAll} disabled={importing}>
-              Importer les {apolloResults.length} résultats
+            <Button size="sm" onClick={() => saveCookies("apollo", apolloCookies)}>
+              Enregistrer (chiffré)
             </Button>
-          )}
-        </div>
-
-        {apolloError && (
-          <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
-            {apolloError}
+          </div>
+        ) : (
+          <div className="mb-4 flex items-center gap-2 text-xs">
+            <CheckCircle2 className="w-4 h-4 text-green-600" />
+            Session Apollo active.
+            <Button variant="ghost" size="sm" onClick={() => clearCookies("apollo")}>
+              Supprimer
+            </Button>
           </div>
         )}
 
-        {apolloResults.length > 0 && (
-          <div className="mt-4 border border-border rounded-md overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+          <div>
+            <Label className="text-xs">Mots-clés</Label>
+            <Input value={apolloScrapeKw} onChange={(e) => setApolloScrapeKw(e.target.value)} placeholder="cabinet comptable" />
+          </div>
+          <div>
+            <Label className="text-xs">Titres</Label>
+            <Input value={apolloScrapeTitles} onChange={(e) => setApolloScrapeTitles(e.target.value)} placeholder="CEO, Founder" />
+          </div>
+          <div>
+            <Label className="text-xs">Localisations</Label>
+            <Input value={apolloScrapeLocations} onChange={(e) => setApolloScrapeLocations(e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-xs">Pages max (1-5)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={5}
+              value={apolloScrapeMaxPages}
+              onChange={(e) => setApolloScrapeMaxPages(Number(e.target.value) || 1)}
+            />
+          </div>
+        </div>
+
+        <Button
+          onClick={startApolloScrape}
+          disabled={!status?.apolloScraper.configured}
+          variant="outline"
+        >
+          <Search className="w-4 h-4 mr-2" />
+          Lancer le scraping Apollo
+        </Button>
+      </section>
+
+      {/* LinkedIn Scraper */}
+      <section className="bg-card border border-border rounded-lg p-6 mb-6">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-sky-50 flex items-center justify-center flex-shrink-0">
+            <Linkedin className="w-5 h-5 text-sky-600" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-base font-semibold">Scraper LinkedIn (session navigateur)</h2>
+            <p className="text-sm text-muted-foreground">
+              Identifie les décideurs depuis la recherche LinkedIn People.
+              {status?.linkedinScraper.configured ? (
+                <span className="text-green-600 ml-1">Cookies enregistrés.</span>
+              ) : (
+                <span className="text-amber-600 ml-1">Cookies manquants.</span>
+              )}
+              {usage && (
+                <span className="ml-2 text-xs">
+                  Quota : {usage.linkedin.used}/{usage.linkedin.limit} / heure
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-md bg-red-50 border border-red-200 p-3 mb-4 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-red-900">
+            <strong>LinkedIn ne fournit jamais d'email.</strong> Tous les leads importés ici
+            sont marqués <code className="mx-1 bg-white/60 px-1 rounded">needs_enrichment</code>
+            et bloqués pour l'envoi tant qu'un vrai email n'a pas été trouvé via le module
+            d'enrichissement (site web, base publique). Aucun email n'est jamais deviné.
+          </div>
+        </div>
+
+        {!status?.linkedinScraper.configured ? (
+          <div className="space-y-2 mb-4">
+            <Label className="text-xs flex items-center gap-1">
+              <Cookie className="w-3 h-3" /> Cookies LinkedIn (doit contenir <code>li_at</code>)
+            </Label>
+            <Textarea
+              value={linkedinCookies}
+              onChange={(e) => setLinkedinCookies(e.target.value)}
+              rows={5}
+              className="font-mono text-xs"
+              placeholder='[{"name":"li_at","value":"...","domain":".linkedin.com"}, ...]'
+            />
+            <Button size="sm" onClick={() => saveCookies("linkedin", linkedinCookies)}>
+              Enregistrer (chiffré)
+            </Button>
+          </div>
+        ) : (
+          <div className="mb-4 flex items-center gap-2 text-xs">
+            <CheckCircle2 className="w-4 h-4 text-green-600" />
+            Session LinkedIn active.
+            <Button variant="ghost" size="sm" onClick={() => clearCookies("linkedin")}>
+              Supprimer
+            </Button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+          <div>
+            <Label className="text-xs">Mots-clés</Label>
+            <Input value={liScrapeKw} onChange={(e) => setLiScrapeKw(e.target.value)} placeholder="comptable Montréal" />
+          </div>
+          <div>
+            <Label className="text-xs">Titres</Label>
+            <Input value={liScrapeTitles} onChange={(e) => setLiScrapeTitles(e.target.value)} placeholder="CPA, Associé" />
+          </div>
+          <div>
+            <Label className="text-xs">Localisations (geoUrn)</Label>
+            <Input value={liScrapeLocations} onChange={(e) => setLiScrapeLocations(e.target.value)} placeholder="101174742" />
+          </div>
+          <div>
+            <Label className="text-xs">Résultats max (1-100)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={100}
+              value={liScrapeMax}
+              onChange={(e) => setLiScrapeMax(Number(e.target.value) || 25)}
+            />
+          </div>
+        </div>
+
+        <Button
+          onClick={startLinkedInScrape}
+          disabled={!status?.linkedinScraper.configured}
+          variant="outline"
+        >
+          <Search className="w-4 h-4 mr-2" />
+          Lancer le scraping LinkedIn
+        </Button>
+      </section>
+
+      {/* Jobs Feed */}
+      <section className="bg-card border border-border rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold">Jobs de scraping récents</h2>
+          <Button variant="ghost" size="sm" onClick={refreshAll}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+        </div>
+        {jobs.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Aucun job pour l'instant.</p>
+        ) : (
+          <div className="border border-border rounded-md overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs">
                 <tr>
-                  <th className="px-3 py-2 text-left font-medium">Nom</th>
-                  <th className="px-3 py-2 text-left font-medium">Poste</th>
-                  <th className="px-3 py-2 text-left font-medium">Entreprise</th>
-                  <th className="px-3 py-2 text-left font-medium">Email</th>
+                  <th className="px-3 py-2 text-left font-medium">#</th>
+                  <th className="px-3 py-2 text-left font-medium">Provider</th>
+                  <th className="px-3 py-2 text-left font-medium">Statut</th>
+                  <th className="px-3 py-2 text-left font-medium">Scrapés</th>
+                  <th className="px-3 py-2 text-left font-medium">Importés</th>
+                  <th className="px-3 py-2 text-left font-medium">Ignorés</th>
+                  <th className="px-3 py-2 text-left font-medium">Détails</th>
                 </tr>
               </thead>
               <tbody>
-                {apolloResults.map((p, i) => (
-                  <tr key={i} className="border-t border-border">
-                    <td className="px-3 py-2">{p.firstName} {p.lastName}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{p.jobTitle}</td>
-                    <td className="px-3 py-2">{p.company}</td>
-                    <td className="px-3 py-2 text-xs">
-                      {p.email ?? <span className="text-amber-600">verrouillé</span>}
+                {jobs.map((j) => (
+                  <tr key={j.id} className="border-t border-border">
+                    <td className="px-3 py-2 font-mono text-xs">{j.id}</td>
+                    <td className="px-3 py-2">{j.provider}</td>
+                    <td className="px-3 py-2">
+                      {j.status === "running" || j.status === "queued" ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-blue-700">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          {j.status}
+                        </span>
+                      ) : j.status === "completed" ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-green-700">
+                          <CheckCircle2 className="w-3 h-3" /> {j.status}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-red-700">
+                          <AlertCircle className="w-3 h-3" /> {j.status}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-xs">{j.itemsScraped}</td>
+                    <td className="px-3 py-2 text-xs text-green-700">{j.itemsImported}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{j.itemsSkipped}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground max-w-xs truncate">
+                      {j.errorMessage ?? JSON.stringify(j.params)}
                     </td>
                   </tr>
                 ))}

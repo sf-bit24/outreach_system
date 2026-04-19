@@ -1,5 +1,10 @@
 import { Router, type IRouter } from "express";
 import { db, leadsTable } from "@workspace/db";
+import {
+  scrapingCredentialsTable,
+  scrapingJobsTable,
+} from "@workspace/db/schema";
+import { eq, desc, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import {
   searchPeople,
@@ -8,6 +13,8 @@ import {
   type ApolloPerson,
 } from "../integrations/apollo";
 import { generateUnsubscribeToken } from "../pipeline/lcap";
+import { encryptJson } from "../scraping/crypto";
+import { runJobInBackground } from "../scraping/jobRunner";
 
 const router: IRouter = Router();
 
@@ -24,10 +31,242 @@ function asInt(v: unknown): number | undefined {
 }
 
 /** GET /api/sources — capability flags for UI */
-router.get("/sources", (_req, res): void => {
+router.get("/sources", async (_req, res): Promise<void> => {
+  const [apolloCreds] = await db
+    .select({ id: scrapingCredentialsTable.id })
+    .from(scrapingCredentialsTable)
+    .where(eq(scrapingCredentialsTable.provider, "apollo"))
+    .limit(1);
+  const [linkedinCreds] = await db
+    .select({ id: scrapingCredentialsTable.id })
+    .from(scrapingCredentialsTable)
+    .where(eq(scrapingCredentialsTable.provider, "linkedin"))
+    .limit(1);
   res.json({
     apollo: { configured: apolloConfigured() },
     csv: { configured: true },
+    apolloScraper: { configured: !!apolloCreds },
+    linkedinScraper: { configured: !!linkedinCreds },
+  });
+});
+
+/* ────────────────────── SCRAPER CREDENTIALS ────────────────────── */
+
+interface CookieInput {
+  name: string;
+  value: string;
+  domain: string;
+  path?: string;
+  expires?: number;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: "Lax" | "Strict" | "None";
+}
+
+function parseCookies(raw: unknown, defaultDomain: string): CookieInput[] {
+  // Accept either: array of cookie objects, or a "Cookie:" header string,
+  // or a JSON exported from a browser extension like "EditThisCookie".
+  if (Array.isArray(raw)) {
+    return raw
+      .filter((c): c is Record<string, unknown> => c !== null && typeof c === "object")
+      .map((c) => ({
+        name: String(c["name"] ?? ""),
+        value: String(c["value"] ?? ""),
+        domain: String(c["domain"] ?? defaultDomain),
+        path: typeof c["path"] === "string" ? c["path"] : "/",
+        expires: typeof c["expirationDate"] === "number"
+          ? c["expirationDate"]
+          : typeof c["expires"] === "number"
+          ? c["expires"]
+          : undefined,
+        httpOnly: typeof c["httpOnly"] === "boolean" ? c["httpOnly"] : false,
+        secure: typeof c["secure"] === "boolean" ? c["secure"] : true,
+        sameSite:
+          c["sameSite"] === "Lax" || c["sameSite"] === "Strict" || c["sameSite"] === "None"
+            ? (c["sameSite"] as "Lax" | "Strict" | "None")
+            : "Lax",
+      }))
+      .filter((c) => c.name && c.value);
+  }
+  if (typeof raw === "string" && raw.trim().length > 0) {
+    // try JSON first
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parseCookies(parsed, defaultDomain);
+    } catch {
+      /* fall through */
+    }
+    // Fallback: parse a Cookie header string "k1=v1; k2=v2"
+    return raw
+      .split(";")
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) => {
+        const idx = p.indexOf("=");
+        if (idx < 0) return null;
+        const name = p.slice(0, idx).trim();
+        const value = p.slice(idx + 1).trim();
+        if (!name || !value) return null;
+        return {
+          name,
+          value,
+          domain: defaultDomain,
+          path: "/",
+          httpOnly: false,
+          secure: true,
+          sameSite: "Lax" as const,
+        };
+      })
+      .filter((c): c is CookieInput => c !== null);
+  }
+  return [];
+}
+
+router.post("/sources/scraper/credentials", async (req, res): Promise<void> => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const provider = body["provider"];
+  if (provider !== "apollo" && provider !== "linkedin") {
+    res.status(400).json({ error: "provider must be 'apollo' or 'linkedin'" });
+    return;
+  }
+  const defaultDomain =
+    provider === "apollo" ? ".apollo.io" : ".linkedin.com";
+  const cookies = parseCookies(body["cookies"], defaultDomain);
+  if (cookies.length === 0) {
+    res.status(400).json({ error: "No valid cookies parsed from input" });
+    return;
+  }
+  // For LinkedIn, the critical cookie is `li_at` — warn if missing
+  if (provider === "linkedin" && !cookies.some((c) => c.name === "li_at")) {
+    res.status(400).json({
+      error: "LinkedIn cookie 'li_at' is required. Export your full cookie set while logged in.",
+    });
+    return;
+  }
+  const userAgent = asString(body["userAgent"]);
+  const label = asString(body["label"]);
+  const payload = encryptJson({ cookies, userAgent, label });
+
+  const existing = await db
+    .select({ id: scrapingCredentialsTable.id })
+    .from(scrapingCredentialsTable)
+    .where(eq(scrapingCredentialsTable.provider, provider))
+    .limit(1);
+
+  if (existing[0]) {
+    await db
+      .update(scrapingCredentialsTable)
+      .set({ encryptedPayload: payload, label, lastError: null })
+      .where(eq(scrapingCredentialsTable.id, existing[0].id));
+    res.json({ id: existing[0].id, provider, updated: true });
+    return;
+  }
+  const [row] = await db
+    .insert(scrapingCredentialsTable)
+    .values({ provider, label, encryptedPayload: payload })
+    .returning({ id: scrapingCredentialsTable.id });
+  res.status(201).json({ id: row?.id, provider, updated: false });
+});
+
+router.delete("/sources/scraper/credentials/:provider", async (req, res): Promise<void> => {
+  const provider = req.params.provider;
+  if (provider !== "apollo" && provider !== "linkedin") {
+    res.status(400).json({ error: "invalid provider" });
+    return;
+  }
+  await db
+    .delete(scrapingCredentialsTable)
+    .where(eq(scrapingCredentialsTable.provider, provider));
+  res.status(204).end();
+});
+
+/* ────────────────────── SCRAPER JOBS ────────────────────── */
+
+router.post("/sources/scraper/jobs", async (req, res): Promise<void> => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const provider = body["provider"];
+  if (provider !== "apollo" && provider !== "linkedin") {
+    res.status(400).json({ error: "provider must be 'apollo' or 'linkedin'" });
+    return;
+  }
+  const params = {
+    keywords: asString(body["keywords"]),
+    jobTitles: asStringArray(body["jobTitles"]),
+    locations: asStringArray(body["locations"]),
+    perPage: asInt(body["perPage"]),
+    maxPages: asInt(body["maxPages"]),
+    maxResults: asInt(body["maxResults"]),
+  };
+
+  // Verify credentials exist before queueing
+  const [creds] = await db
+    .select({ id: scrapingCredentialsTable.id })
+    .from(scrapingCredentialsTable)
+    .where(eq(scrapingCredentialsTable.provider, provider))
+    .limit(1);
+  if (!creds) {
+    res.status(400).json({
+      error: `No ${provider} session cookies configured. Import them first.`,
+    });
+    return;
+  }
+
+  const [job] = await db
+    .insert(scrapingJobsTable)
+    .values({ provider, params, status: "queued" })
+    .returning();
+  if (!job) {
+    res.status(500).json({ error: "Failed to create job" });
+    return;
+  }
+  runJobInBackground(job.id);
+  res.status(201).json(job);
+});
+
+router.get("/sources/scraper/jobs", async (_req, res): Promise<void> => {
+  const jobs = await db
+    .select()
+    .from(scrapingJobsTable)
+    .orderBy(desc(scrapingJobsTable.id))
+    .limit(20);
+  res.json(jobs);
+});
+
+router.get("/sources/scraper/jobs/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id ?? "", 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "invalid id" });
+    return;
+  }
+  const [job] = await db
+    .select()
+    .from(scrapingJobsTable)
+    .where(eq(scrapingJobsTable.id, id))
+    .limit(1);
+  if (!job) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+  res.json(job);
+});
+
+/** Aggregate hourly usage per provider for the rate-limit UI badge. */
+router.get("/sources/scraper/usage", async (_req, res): Promise<void> => {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const rows = await db
+    .select({
+      provider: scrapingJobsTable.provider,
+      total: sql<number>`coalesce(sum(${scrapingJobsTable.itemsScraped}), 0)::int`,
+    })
+    .from(scrapingJobsTable)
+    .where(sql`${scrapingJobsTable.startedAt} >= ${oneHourAgo}`)
+    .groupBy(scrapingJobsTable.provider);
+  const usage: Record<string, number> = { apollo: 0, linkedin: 0 };
+  for (const r of rows) usage[r.provider] = Number(r.total);
+  res.json({
+    apollo: { used: usage.apollo, limit: 200 },
+    linkedin: { used: usage.linkedin, limit: 100 },
+    windowMinutes: 60,
   });
 });
 
@@ -97,6 +336,10 @@ router.post("/sources/apollo/import", async (req, res): Promise<void> => {
           companySize: p.companySize ?? null,
           campaignId,
           unsubscribeToken: generateUnsubscribeToken(),
+          source: "apollo_api",
+          // Apollo-supplied emails are not pre-verified by us — force enrichment.
+          emailStatus: "scraped",
+          emailLocked: true,
         })
         .onConflictDoNothing()
         .returning();

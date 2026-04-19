@@ -73,6 +73,23 @@ export async function sendEmailViaResend(
   settings: SenderSettings,
   unsubscribeToken: string,
 ): Promise<SendResult> {
+  // Hard guard: never send to leads with unverified or locked emails.
+  // Allowlist approach — only emails with explicit verification pass.
+  // - null/undefined emailStatus: legacy CSV-imported leads (user-curated, allowed)
+  // - "verified": passed enrichment + validation
+  // Anything else (scraped, locked, needs_enrichment) is blocked until verified.
+  const ALLOWED_STATUSES: ReadonlyArray<string | null> = [null, "verified"];
+  if (
+    lead.emailLocked ||
+    !ALLOWED_STATUSES.includes(lead.emailStatus ?? null) ||
+    /@example\.invalid$/i.test(lead.email)
+  ) {
+    return {
+      success: false,
+      error: `Lead email not verified (status=${lead.emailStatus ?? "null"}, locked=${lead.emailLocked}). Run enrichment before sending.`,
+    };
+  }
+
   const { html, text } = buildLcapEmail(email, lead, settings, unsubscribeToken);
   const from = `${settings.senderName} <${settings.senderEmail}>`;
 
