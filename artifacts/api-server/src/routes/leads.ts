@@ -30,11 +30,12 @@ router.get("/leads", async (req, res): Promise<void> => {
     return;
   }
 
-  const { stage, campaignId, search } = parsed.data;
+  const { stage, campaignId, search, source } = parsed.data;
   const conditions: SQL[] = [];
 
   if (stage) conditions.push(eq(leadsTable.stage, stage as any));
   if (campaignId != null) conditions.push(eq(leadsTable.campaignId, campaignId));
+  if (source) conditions.push(eq(leadsTable.source, source));
   if (search) {
     const term = `%${search}%`;
     const cond = or(
@@ -220,9 +221,9 @@ router.post("/leads/:id/enrich", async (req, res): Promise<void> => {
 
   // Run each step independently — partial enrichment is better than nothing
   const [websiteRes, hiringRes, emailRes] = await Promise.allSettled([
-    analyzeWebsite(existing.website, existing.email),
+    analyzeWebsite(existing.website, existing.email ?? ""),
     detectHiringSignal(existing.website),
-    validateEmail(existing.email),
+    existing.email ? validateEmail(existing.email) : Promise.resolve(null),
   ]);
 
   const website =
@@ -242,9 +243,9 @@ router.post("/leads/:id/enrich", async (req, res): Promise<void> => {
       ? hiringRes.value
       : { isHiring: false, intentSignal: null };
   const emailCheck =
-    emailRes.status === "fulfilled"
+    emailRes.status === "fulfilled" && emailRes.value
       ? emailRes.value
-      : { valid: false, reason: "Validation failed (transient error)", hasMxRecord: false };
+      : { valid: false, reason: existing.email ? "Validation failed (transient error)" : "Aucun email à valider", hasMxRecord: false };
 
   if (websiteRes.status === "rejected") {
     logger.warn({ err: websiteRes.reason, leadId: existing.id }, "Website analysis failed");

@@ -46,7 +46,7 @@ async function handleUnsubscribe(req: Request, res: Response): Promise<void> {
 
     await db.insert(activitiesTable).values({
       type: "email_replied",
-      description: `${lead.firstName} ${lead.lastName} (${lead.email}) s'est désabonné(e)`,
+      description: `${lead.firstName} ${lead.lastName} (${lead.email ?? "sans email"}) s'est désabonné(e)`,
       leadName: `${lead.firstName} ${lead.lastName}`,
       leadId: lead.id,
     });
@@ -57,7 +57,7 @@ async function handleUnsubscribe(req: Request, res: Response): Promise<void> {
   res.status(200).send(
     renderPage(
       "Désabonnement confirmé",
-      `<p>${escape(lead.firstName)}, votre adresse <strong>${escape(lead.email)}</strong> a bien été retirée de notre liste.</p><p>Vous ne recevrez plus de messages de notre part.</p>`,
+      `<p>${escape(lead.firstName)}, votre adresse <strong>${escape(lead.email ?? "")}</strong> a bien été retirée de notre liste.</p><p>Vous ne recevrez plus de messages de notre part.</p>`,
     ),
   );
 }

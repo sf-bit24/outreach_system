@@ -29,13 +29,23 @@ export interface Lead {
   id: number;
   firstName: string;
   lastName: string;
-  email: string;
+  /** @nullable */
+  email?: string | null;
   company: string;
   jobTitle: string;
   /** @nullable */
   website?: string | null;
   /** @nullable */
   linkedinUrl?: string | null;
+  /** @nullable */
+  source?: string | null;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /** @nullable */
+  emailStatus?: string | null;
+  emailLocked?: boolean;
+  /** @nullable */
+  scrapedAt?: string | null;
   /** @nullable */
   phone?: string | null;
   /** @nullable */
@@ -302,6 +312,7 @@ export type ListLeadsParams = {
    */
   campaignId?: number | null;
   search?: string;
+  source?: string;
 };
 
 export type ListEmailsParams = {

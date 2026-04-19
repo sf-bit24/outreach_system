@@ -73,20 +73,19 @@ export async function sendEmailViaResend(
   settings: SenderSettings,
   unsubscribeToken: string,
 ): Promise<SendResult> {
-  // Hard guard: never send to leads with unverified or locked emails.
-  // Allowlist approach — only emails with explicit verification pass.
-  // - null/undefined emailStatus: legacy CSV-imported leads (user-curated, allowed)
-  // - "verified": passed enrichment + validation
-  // Anything else (scraped, locked, needs_enrichment) is blocked until verified.
+  // Hard guard: never send to leads without a verified email.
+  // - email must be present (no nulls — those need enrichment)
+  // - email must not be locked
+  // - email_status must be in the allowlist (null = legacy CSV-imported, allowed; "verified" = enriched+validated)
   const ALLOWED_STATUSES: ReadonlyArray<string | null> = [null, "verified"];
   if (
+    !lead.email ||
     lead.emailLocked ||
-    !ALLOWED_STATUSES.includes(lead.emailStatus ?? null) ||
-    /@example\.invalid$/i.test(lead.email)
+    !ALLOWED_STATUSES.includes(lead.emailStatus ?? null)
   ) {
     return {
       success: false,
-      error: `Lead email not verified (status=${lead.emailStatus ?? "null"}, locked=${lead.emailLocked}). Run enrichment before sending.`,
+      error: `Lead email not verified (email=${lead.email ?? "null"}, status=${lead.emailStatus ?? "null"}, locked=${lead.emailLocked}). Run enrichment before sending.`,
     };
   }
 
@@ -109,7 +108,7 @@ export async function sendEmailViaResend(
   try {
     const result = await client.emails.send({
       from,
-      to: lead.email,
+      to: lead.email!,
       subject: email.subject,
       html,
       text,

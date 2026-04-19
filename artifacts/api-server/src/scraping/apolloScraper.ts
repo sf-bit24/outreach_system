@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import type { BrowserContext } from "playwright";
 import {
   newContextWithCredentials,

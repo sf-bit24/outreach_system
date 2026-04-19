@@ -56,11 +56,11 @@ interface CookieInput {
   name: string;
   value: string;
   domain: string;
-  path?: string;
+  path: string;
   expires?: number;
-  httpOnly?: boolean;
-  secure?: boolean;
-  sameSite?: "Lax" | "Strict" | "None";
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: "Lax" | "Strict" | "None";
 }
 
 function parseCookies(raw: unknown, defaultDomain: string): CookieInput[] {
@@ -101,7 +101,7 @@ function parseCookies(raw: unknown, defaultDomain: string): CookieInput[] {
       .split(";")
       .map((p) => p.trim())
       .filter(Boolean)
-      .map((p) => {
+      .map((p): CookieInput | null => {
         const idx = p.indexOf("=");
         if (idx < 0) return null;
         const name = p.slice(0, idx).trim();
@@ -114,7 +114,7 @@ function parseCookies(raw: unknown, defaultDomain: string): CookieInput[] {
           path: "/",
           httpOnly: false,
           secure: true,
-          sameSite: "Lax" as const,
+          sameSite: "Lax",
         };
       })
       .filter((c): c is CookieInput => c !== null);

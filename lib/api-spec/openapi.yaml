@@ -54,6 +54,10 @@ paths:
           name: search
           schema:
             type: string
+        - in: query
+          name: source
+          schema:
+            type: string
       responses:
         "200":
           description: List of leads
@@ -523,7 +527,7 @@ components:
         lastName:
           type: string
         email:
-          type: string
+          type: ["string", "null"]
         company:
           type: string
         jobTitle:
@@ -531,6 +535,16 @@ components:
         website:
           type: ["string", "null"]
         linkedinUrl:
+          type: ["string", "null"]
+        source:
+          type: ["string", "null"]
+        sourceUrl:
+          type: ["string", "null"]
+        emailStatus:
+          type: ["string", "null"]
+        emailLocked:
+          type: boolean
+        scrapedAt:
           type: ["string", "null"]
         phone:
           type: ["string", "null"]
@@ -579,7 +593,6 @@ components:
         - id
         - firstName
         - lastName
-        - email
         - company
         - jobTitle
         - stage

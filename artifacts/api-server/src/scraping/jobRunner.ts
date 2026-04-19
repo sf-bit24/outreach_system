@@ -7,8 +7,16 @@ import {
 } from "@workspace/db/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { decryptJson } from "./crypto";
-import { scrapeApollo, type ScrapedApolloPerson } from "./apolloScraper";
-import { scrapeLinkedIn, type ScrapedLinkedInPerson } from "./linkedinScraper";
+import {
+  scrapeApollo,
+  type ScrapedApolloPerson,
+  type ApolloSearchParams,
+} from "./apolloScraper";
+import {
+  scrapeLinkedIn,
+  type ScrapedLinkedInPerson,
+  type LinkedInSearchParams,
+} from "./linkedinScraper";
 import type { StoredCredentials } from "./browser";
 
 type Provider = "apollo" | "linkedin";
@@ -66,13 +74,57 @@ function dedupeKey(p: {
   return `name:${p.firstName.toLowerCase()}|${p.lastName.toLowerCase()}|${(p.company ?? "").toLowerCase()}`;
 }
 
+/**
+ * Look for an existing lead matching this scraped record. Tries (in order):
+ * email, linkedinUrl, then (firstName + lastName + company) as a last-resort
+ * fallback to keep duplicates out of the DB.
+ */
+async function findExistingLead(p: {
+  email?: string | null;
+  linkedinUrl?: string | null;
+  firstName: string;
+  lastName: string;
+  company?: string | null;
+}): Promise<{ id: number } | null> {
+  if (p.email) {
+    const [row] = await db
+      .select({ id: leadsTable.id })
+      .from(leadsTable)
+      .where(eq(leadsTable.email, p.email.toLowerCase()))
+      .limit(1);
+    if (row) return row;
+  }
+  if (p.linkedinUrl) {
+    const [row] = await db
+      .select({ id: leadsTable.id })
+      .from(leadsTable)
+      .where(eq(leadsTable.linkedinUrl, p.linkedinUrl))
+      .limit(1);
+    if (row) return row;
+  }
+  const company = p.company ?? "";
+  const [row] = await db
+    .select({ id: leadsTable.id })
+    .from(leadsTable)
+    .where(
+      and(
+        eq(leadsTable.firstName, p.firstName),
+        eq(leadsTable.lastName, p.lastName),
+        eq(leadsTable.company, company),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 async function importApollo(
-  job: ScrapingJob,
+  _job: ScrapingJob,
   results: ScrapedApolloPerson[],
 ): Promise<{ imported: number; skipped: number }> {
   let imported = 0;
   let skipped = 0;
   const seen = new Set<string>();
+  const now = new Date();
   for (const r of results) {
     const key = dedupeKey(r);
     if (seen.has(key)) {
@@ -81,40 +133,36 @@ async function importApollo(
     }
     seen.add(key);
 
-    // Skip locked emails — never insert with fake/locked email
-    if (!r.email && !r.linkedinUrl) {
+    const existing = await findExistingLead(r);
+    if (existing) {
+      // Idempotent re-scrape: refresh the scraped_at marker but never
+      // overwrite an existing email or status.
+      await db
+        .update(leadsTable)
+        .set({ scrapedAt: now })
+        .where(eq(leadsTable.id, existing.id));
       skipped++;
       continue;
     }
-    // If email exists, dedupe on it
-    if (r.email) {
-      const existing = await db
-        .select({ id: leadsTable.id })
-        .from(leadsTable)
-        .where(eq(leadsTable.email, r.email.toLowerCase()))
-        .limit(1);
-      if (existing.length) {
-        skipped++;
-        continue;
-      }
-    }
     try {
+      const hasEmail = Boolean(r.email);
       await db.insert(leadsTable).values({
         firstName: r.firstName || "Unknown",
         lastName: r.lastName || "",
-        // Apollo locked rows have no real email — store a placeholder we can never send to
-        email: r.email?.toLowerCase() ?? `locked+apollo-${Date.now()}-${imported}@example.invalid`,
+        // No invented emails — store NULL when Apollo masks the address.
+        email: hasEmail ? r.email!.toLowerCase() : null,
         company: r.company ?? "Unknown",
         jobTitle: r.jobTitle ?? "Unknown",
         linkedinUrl: r.linkedinUrl,
         location: r.location,
         source: "apollo_scrape",
         sourceUrl: r.sourceUrl,
-        // Even visible Apollo emails are NEVER trusted for direct sending.
-        // Mark as "scraped" so the sender guard blocks them until enrichment verifies.
-        emailStatus: r.email ? "scraped" : "locked",
-        emailLocked: true,
-        scrapedAt: new Date(),
+        // Apollo's visible emails still need our own verification before sending,
+        // but they are not "locked" by Apollo. emailLocked reflects Apollo's
+        // own masking only.
+        emailStatus: hasEmail ? "scraped" : "locked",
+        emailLocked: !hasEmail,
+        scrapedAt: now,
       });
       imported++;
     } catch {
@@ -125,12 +173,13 @@ async function importApollo(
 }
 
 async function importLinkedIn(
-  job: ScrapingJob,
+  _job: ScrapingJob,
   results: ScrapedLinkedInPerson[],
 ): Promise<{ imported: number; skipped: number }> {
   let imported = 0;
   let skipped = 0;
   const seen = new Set<string>();
+  const now = new Date();
   for (const r of results) {
     const key = dedupeKey(r);
     if (seen.has(key)) {
@@ -142,23 +191,21 @@ async function importLinkedIn(
       skipped++;
       continue;
     }
-    const existing = await db
-      .select({ id: leadsTable.id })
-      .from(leadsTable)
-      .where(eq(leadsTable.linkedinUrl, r.linkedinUrl))
-      .limit(1);
-    if (existing.length) {
+    const existing = await findExistingLead(r);
+    if (existing) {
+      await db
+        .update(leadsTable)
+        .set({ scrapedAt: now })
+        .where(eq(leadsTable.id, existing.id));
       skipped++;
       continue;
     }
     try {
-      // LinkedIn never gives emails in search; mark as needs_enrichment
-      // Use placeholder email that will be filtered out of sending queue
-      const placeholder = `pending+li-${Date.now()}-${imported}@example.invalid`;
+      // LinkedIn search results never expose emails. Store NULL — never invent.
       await db.insert(leadsTable).values({
         firstName: r.firstName || "Unknown",
         lastName: r.lastName || "",
-        email: placeholder,
+        email: null,
         company: r.company ?? "Unknown",
         jobTitle: r.jobTitle ?? "Unknown",
         linkedinUrl: r.linkedinUrl,
@@ -166,8 +213,8 @@ async function importLinkedIn(
         source: "linkedin_scrape",
         sourceUrl: r.sourceUrl,
         emailStatus: "needs_enrichment",
-        emailLocked: true,
-        scrapedAt: new Date(),
+        emailLocked: false,
+        scrapedAt: now,
       });
       imported++;
     } catch {
@@ -177,7 +224,11 @@ async function importLinkedIn(
   return { imported, skipped };
 }
 
-export async function runScrapingJob(jobId: number): Promise<void> {
+interface JobResult {
+  sample: ScrapedApolloPerson[] | ScrapedLinkedInPerson[];
+}
+
+async function executeJob(jobId: number): Promise<void> {
   const [job] = await db
     .select()
     .from(scrapingJobsTable)
@@ -192,24 +243,28 @@ export async function runScrapingJob(jobId: number): Promise<void> {
     .where(eq(scrapingJobsTable.id, jobId));
 
   try {
-    await checkRateLimit(job.provider as Provider);
-    const creds = await loadCredentials(job.provider as Provider);
-    const params = job.params as Record<string, unknown>;
+    const provider = job.provider as Provider;
+    await checkRateLimit(provider);
+    const creds = await loadCredentials(provider);
+    const params = (job.params ?? {}) as Record<string, unknown>;
 
     let scraped = 0;
     let imported = 0;
     let skipped = 0;
-    let resultPayload: unknown = null;
+    let resultPayload: JobResult | null = null;
 
-    if (job.provider === "apollo") {
-      const results = await scrapeApollo(creds, params as never);
+    if (provider === "apollo") {
+      const results = await scrapeApollo(creds, params as ApolloSearchParams);
       scraped = results.length;
       const counts = await importApollo(job, results);
       imported = counts.imported;
       skipped = counts.skipped;
       resultPayload = { sample: results.slice(0, 3) };
-    } else if (job.provider === "linkedin") {
-      const results = await scrapeLinkedIn(creds, params as never);
+    } else if (provider === "linkedin") {
+      const results = await scrapeLinkedIn(
+        creds,
+        params as LinkedInSearchParams,
+      );
       scraped = results.length;
       const counts = await importLinkedIn(job, results);
       imported = counts.imported;
@@ -225,7 +280,7 @@ export async function runScrapingJob(jobId: number): Promise<void> {
         itemsScraped: scraped,
         itemsImported: imported,
         itemsSkipped: skipped,
-        result: resultPayload as never,
+        result: resultPayload,
       })
       .where(eq(scrapingJobsTable.id, jobId));
   } catch (err) {
@@ -243,10 +298,31 @@ export async function runScrapingJob(jobId: number): Promise<void> {
 }
 
 /**
- * Fire-and-forget — runs the job in the background. Errors are persisted on the job row.
+ * Serialized worker queue. Only one scraping job runs at a time per process —
+ * this matches the "un à la fois" requirement and avoids parallel browser
+ * instances hammering the same provider session.
+ */
+let workerChain: Promise<void> = Promise.resolve();
+
+export function runScrapingJob(jobId: number): Promise<void> {
+  return executeJob(jobId);
+}
+
+export function enqueueJob(jobId: number): Promise<void> {
+  const next = workerChain
+    .catch(() => undefined)
+    .then(() =>
+      executeJob(jobId).catch((err) => {
+        console.error(`[scraping] Job ${jobId} failed:`, err);
+      }),
+    );
+  workerChain = next;
+  return next;
+}
+
+/**
+ * Fire-and-forget — schedules the job behind any in-flight job.
  */
 export function runJobInBackground(jobId: number): void {
-  void runScrapingJob(jobId).catch((err) => {
-    console.error(`[scraping] Job ${jobId} failed:`, err);
-  });
+  void enqueueJob(jobId);
 }

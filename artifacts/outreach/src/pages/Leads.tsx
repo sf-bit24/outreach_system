@@ -8,7 +8,7 @@ import {
   getListLeadsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Upload, Trash2, ExternalLink, RefreshCw } from "lucide-react";
+import { Plus, Search, Trash2, ExternalLink, Lock, MailQuestion } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -52,15 +52,31 @@ const createLeadSchema = z.object({
 
 type CreateLeadForm = z.infer<typeof createLeadSchema>;
 
+const SOURCE_LABELS: Record<string, string> = {
+  manual: "Manuel",
+  csv: "CSV",
+  apollo_api: "Apollo (API)",
+  apollo_scrape: "Apollo (scrape)",
+  linkedin_scrape: "LinkedIn",
+  gmaps_scrape: "Google Maps",
+};
+
+function formatSource(source: string | null | undefined): string {
+  if (!source) return "Manuel";
+  return SOURCE_LABELS[source] ?? source;
+}
+
 export default function Leads() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const params = {
     ...(stageFilter !== "all" ? { stage: stageFilter } : {}),
+    ...(sourceFilter !== "all" ? { source: sourceFilter } : {}),
     ...(search ? { search } : {}),
   };
 
@@ -293,6 +309,19 @@ export default function Leads() {
             <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={sourceFilter} onValueChange={setSourceFilter}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Toutes les sources" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes les sources</SelectItem>
+            <SelectItem value="manual">Manuel</SelectItem>
+            <SelectItem value="csv">CSV</SelectItem>
+            <SelectItem value="apollo_api">Apollo (API)</SelectItem>
+            <SelectItem value="apollo_scrape">Apollo (scrape)</SelectItem>
+            <SelectItem value="linkedin_scrape">LinkedIn</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -310,7 +339,7 @@ export default function Leads() {
                 Email
               </th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden lg:table-cell">
-                Industry
+                Source
               </th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Stage
@@ -339,11 +368,30 @@ export default function Leads() {
                     <p className="text-xs text-muted-foreground">{lead.jobTitle}</p>
                   </td>
                   <td className="px-4 py-3 text-foreground">{lead.company}</td>
-                  <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
-                    {lead.email}
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    {lead.email ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground">{lead.email}</span>
+                        {lead.emailLocked && (
+                          <span
+                            title="Email verrouillé — non envoyable tant qu'il n'est pas vérifié"
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800"
+                          >
+                            <Lock className="w-3 h-3" /> verrouillé
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span
+                        title="Aucun email — à enrichir avant l'envoi"
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800"
+                      >
+                        <MailQuestion className="w-3 h-3" /> email à enrichir
+                      </span>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">
-                    {lead.industry ?? "—"}
+                  <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">
+                    {formatSource(lead.source)}
                   </td>
                   <td className="px-4 py-3">
                     <StageBadge stage={lead.stage} />
