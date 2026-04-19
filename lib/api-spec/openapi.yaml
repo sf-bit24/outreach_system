@@ -3,20 +3,28 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Outreach System API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: leads
+    description: Lead management
+  - name: campaigns
+    description: Campaign management
+  - name: emails
+    description: Email generation and sending
+  - name: dashboard
+    description: Dashboard and analytics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +32,437 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─────────── LEADS ───────────
+  /leads:
+    get:
+      operationId: listLeads
+      tags: [leads]
+      summary: List all leads
+      parameters:
+        - in: query
+          name: stage
+          schema:
+            type: string
+        - in: query
+          name: campaignId
+          schema:
+            type: ["integer", "null"]
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of leads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Lead"
+    post:
+      operationId: createLead
+      tags: [leads]
+      summary: Create a new lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLeadBody"
+      responses:
+        "201":
+          description: Created lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+
+  /leads/import:
+    post:
+      operationId: importLeads
+      tags: [leads]
+      summary: Bulk import leads
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportLeadsBody"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportLeadsResult"
+
+  /leads/{id}:
+    get:
+      operationId: getLead
+      tags: [leads]
+      summary: Get a lead by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateLead
+      tags: [leads]
+      summary: Update a lead
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLeadBody"
+      responses:
+        "200":
+          description: Updated lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+    delete:
+      operationId: deleteLead
+      tags: [leads]
+      summary: Delete a lead
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /leads/{id}/enrich:
+    post:
+      operationId: enrichLead
+      tags: [leads]
+      summary: Trigger enrichment for a lead
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Enriched lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+
+  # ─────────── CAMPAIGNS ───────────
+  /campaigns:
+    get:
+      operationId: listCampaigns
+      tags: [campaigns]
+      summary: List all campaigns
+      responses:
+        "200":
+          description: List of campaigns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Campaign"
+    post:
+      operationId: createCampaign
+      tags: [campaigns]
+      summary: Create a campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCampaignBody"
+      responses:
+        "201":
+          description: Created campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+
+  /campaigns/{id}:
+    get:
+      operationId: getCampaign
+      tags: [campaigns]
+      summary: Get a campaign by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateCampaign
+      tags: [campaigns]
+      summary: Update a campaign
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCampaignBody"
+      responses:
+        "200":
+          description: Updated campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+    delete:
+      operationId: deleteCampaign
+      tags: [campaigns]
+      summary: Delete a campaign
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /campaigns/{id}/start:
+    post:
+      operationId: startCampaign
+      tags: [campaigns]
+      summary: Start a campaign
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Campaign started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+
+  /campaigns/{id}/pause:
+    post:
+      operationId: pauseCampaign
+      tags: [campaigns]
+      summary: Pause a campaign
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Campaign paused
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+
+  # ─────────── EMAILS ───────────
+  /emails:
+    get:
+      operationId: listEmails
+      tags: [emails]
+      summary: List emails
+      parameters:
+        - in: query
+          name: leadId
+          schema:
+            type: ["integer", "null"]
+        - in: query
+          name: campaignId
+          schema:
+            type: ["integer", "null"]
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of emails
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Email"
+
+  /emails/generate:
+    post:
+      operationId: generateEmail
+      tags: [emails]
+      summary: Generate a personalized AI email for a lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateEmailBody"
+      responses:
+        "201":
+          description: Generated email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Email"
+
+  /emails/{id}:
+    get:
+      operationId: getEmail
+      tags: [emails]
+      summary: Get an email by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Email"
+    patch:
+      operationId: updateEmail
+      tags: [emails]
+      summary: Update email content
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEmailBody"
+      responses:
+        "200":
+          description: Updated email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Email"
+
+  /emails/{id}/send:
+    post:
+      operationId: sendEmail
+      tags: [emails]
+      summary: Send an email
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Email"
+
+  # ─────────── DASHBOARD ───────────
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get overall outreach statistics
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /dashboard/pipeline:
+    get:
+      operationId: getPipeline
+      tags: [dashboard]
+      summary: Get leads grouped by stage
+      responses:
+        "200":
+          description: Pipeline breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PipelineStage"
+
+  /dashboard/activity:
+    get:
+      operationId: getActivity
+      tags: [dashboard]
+      summary: Get recent activity feed
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +473,363 @@ components:
       required:
         - status
 
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Lead:
+      type: object
+      properties:
+        id:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        company:
+          type: string
+        jobTitle:
+          type: string
+        website:
+          type: ["string", "null"]
+        linkedinUrl:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        industry:
+          type: ["string", "null"]
+        companySize:
+          type: ["string", "null"]
+        location:
+          type: ["string", "null"]
+        stage:
+          type: string
+          enum: [raw, enriched, email_generated, contacted, replied, converted, unsubscribed]
+        emailValid:
+          type: ["boolean", "null"]
+        isHiring:
+          type: ["boolean", "null"]
+        intentSignal:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        campaignId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - firstName
+        - lastName
+        - email
+        - company
+        - jobTitle
+        - stage
+        - createdAt
+        - updatedAt
+
+    CreateLeadBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        company:
+          type: string
+        jobTitle:
+          type: string
+        website:
+          type: string
+        linkedinUrl:
+          type: string
+        phone:
+          type: string
+        industry:
+          type: string
+        companySize:
+          type: string
+        location:
+          type: string
+        campaignId:
+          type: integer
+        notes:
+          type: string
+      required:
+        - firstName
+        - lastName
+        - email
+        - company
+        - jobTitle
+
+    UpdateLeadBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        company:
+          type: string
+        jobTitle:
+          type: string
+        website:
+          type: string
+        linkedinUrl:
+          type: string
+        phone:
+          type: string
+        industry:
+          type: string
+        companySize:
+          type: string
+        location:
+          type: string
+        stage:
+          type: string
+        campaignId:
+          type: integer
+        notes:
+          type: string
+
+    ImportLeadsBody:
+      type: object
+      properties:
+        leads:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateLeadBody"
+        campaignId:
+          type: integer
+      required:
+        - leads
+
+    ImportLeadsResult:
+      type: object
+      properties:
+        imported:
+          type: integer
+        skipped:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+      required:
+        - imported
+        - skipped
+        - errors
+
+    Campaign:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [draft, active, paused, completed]
+        emailSubject:
+          type: ["string", "null"]
+        emailTemplate:
+          type: ["string", "null"]
+        sendingDelayMinutes:
+          type: integer
+        dailyLimit:
+          type: integer
+        totalLeads:
+          type: integer
+        contacted:
+          type: integer
+        replied:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - status
+        - sendingDelayMinutes
+        - dailyLimit
+        - totalLeads
+        - contacted
+        - replied
+        - createdAt
+        - updatedAt
+
+    CreateCampaignBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        emailSubject:
+          type: string
+        emailTemplate:
+          type: string
+        sendingDelayMinutes:
+          type: integer
+        dailyLimit:
+          type: integer
+      required:
+        - name
+
+    UpdateCampaignBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        emailSubject:
+          type: string
+        emailTemplate:
+          type: string
+        sendingDelayMinutes:
+          type: integer
+        dailyLimit:
+          type: integer
+
+    Email:
+      type: object
+      properties:
+        id:
+          type: integer
+        leadId:
+          type: integer
+        campaignId:
+          type: ["integer", "null"]
+        subject:
+          type: string
+        body:
+          type: string
+        hook:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [draft, sent, opened, replied, bounced]
+        sentAt:
+          type: ["string", "null"]
+        openedAt:
+          type: ["string", "null"]
+        repliedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - leadId
+        - subject
+        - body
+        - status
+        - createdAt
+
+    GenerateEmailBody:
+      type: object
+      properties:
+        leadId:
+          type: integer
+        campaignId:
+          type: integer
+        customContext:
+          type: string
+      required:
+        - leadId
+
+    UpdateEmailBody:
+      type: object
+      properties:
+        subject:
+          type: string
+        body:
+          type: string
+        hook:
+          type: string
+
+    DashboardStats:
+      type: object
+      properties:
+        totalLeads:
+          type: integer
+        enrichedLeads:
+          type: integer
+        emailsGenerated:
+          type: integer
+        emailsSent:
+          type: integer
+        emailsOpened:
+          type: integer
+        emailsReplied:
+          type: integer
+        activeCampaigns:
+          type: integer
+        replyRate:
+          type: number
+        openRate:
+          type: number
+      required:
+        - totalLeads
+        - enrichedLeads
+        - emailsGenerated
+        - emailsSent
+        - emailsOpened
+        - emailsReplied
+        - activeCampaigns
+        - replyRate
+        - openRate
+
+    PipelineStage:
+      type: object
+      properties:
+        stage:
+          type: string
+        count:
+          type: integer
+        label:
+          type: string
+      required:
+        - stage
+        - count
+        - label
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [lead_added, lead_enriched, email_generated, email_sent, email_opened, email_replied, campaign_started, campaign_paused]
+        description:
+          type: string
+        leadName:
+          type: ["string", "null"]
+        campaignName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - type
+        - description
+        - createdAt

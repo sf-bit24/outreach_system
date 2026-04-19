@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Outreach System"
+version = "1.0.0"
+id = "artifacts/outreach"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22096
+
+[services.development]
+run = "pnpm --filter @workspace/outreach run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/outreach", "run", "build" ]
+publicDir = "artifacts/outreach/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22096"
+BASE_PATH = "/"
