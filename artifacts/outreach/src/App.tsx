@@ -9,6 +9,7 @@ import LeadDetail from "@/pages/LeadDetail";
 import Campaigns from "@/pages/Campaigns";
 import CampaignDetail from "@/pages/CampaignDetail";
 import Emails from "@/pages/Emails";
+import Sources from "@/pages/Sources";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -25,6 +26,7 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Dashboard} />
+        <Route path="/sources" component={Sources} />
         <Route path="/leads" component={Leads} />
         <Route path="/leads/:id" component={LeadDetail} />
         <Route path="/campaigns" component={Campaigns} />

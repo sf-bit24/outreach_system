@@ -1,9 +1,10 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Users, Megaphone, Mail, Zap } from "lucide-react";
+import { LayoutDashboard, Users, Megaphone, Mail, Zap, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/sources", label: "Sources", icon: Database },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/emails", label: "Emails", icon: Mail },

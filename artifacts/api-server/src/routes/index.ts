@@ -6,6 +6,7 @@ import emailsRouter from "./emails";
 import dashboardRouter from "./dashboard";
 import settingsRouter from "./settings";
 import complianceRouter from "./compliance";
+import sourcesRouter from "./sources";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(emailsRouter);
 router.use(dashboardRouter);
 router.use(settingsRouter);
 router.use(complianceRouter);
+router.use(sourcesRouter);
 
 export default router;

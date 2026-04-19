@@ -6,7 +6,11 @@ OutreachIQ is an intelligent B2B outreach automation system implementing the
 in `attached_assets/`. It is built on the pnpm monorepo template.
 
 ## Pipeline (4 stages)
-1. **Data Acquisition** — leads imported manually or in bulk via `/api/leads/import`.
+1. **Data Acquisition** — three paths:
+   - Manual entry via `/leads` page or `/api/leads`.
+   - Bulk JSON import via `/api/leads/import`.
+   - **CSV upload** via `/sources` page or `POST /api/sources/csv/import` (FR/EN headers supported).
+   - **Apollo.io** via `POST /api/sources/apollo/{search,match,import}` — requires `APOLLO_API_KEY`. Note: Apollo's free plan blocks both `mixed_people/search` and `people/match` (returns 403 `API_INACCESSIBLE`). The standard free workflow is to export from Apollo's web UI and import as CSV.
 2. **Enrichment & Validation** — `/api/leads/:id/enrich` runs in parallel:
    - DNS MX-record + syntax + disposable/role validation (`pipeline/emailValidator.ts`)
    - Cheerio website scraping → summary, top keywords, visible-email check (`pipeline/websiteScraper.ts`)
