@@ -140,7 +140,11 @@ export async function scrapeApollo(
           .catch(() => null);
 
         if (!data || !data.firstName) continue;
-        results.push({ ...data, sourceUrl: page.url() });
+        // Per-lead provenance: prefer the LinkedIn profile URL when present,
+        // otherwise fall back to the search page URL so we always have *some*
+        // audit trail.
+        const sourceUrl = data.linkedinUrl ?? page.url();
+        results.push({ ...data, sourceUrl });
       }
 
       if (pageNum < maxPages) {

@@ -33,20 +33,33 @@ function asInt(v: unknown): number | undefined {
 /** GET /api/sources — capability flags for UI */
 router.get("/sources", async (_req, res): Promise<void> => {
   const [apolloCreds] = await db
-    .select({ id: scrapingCredentialsTable.id })
+    .select({ id: scrapingCredentialsTable.id, status: scrapingCredentialsTable.status, lastError: scrapingCredentialsTable.lastError })
     .from(scrapingCredentialsTable)
     .where(eq(scrapingCredentialsTable.provider, "apollo"))
+    .orderBy(sql`${scrapingCredentialsTable.id} DESC`)
     .limit(1);
   const [linkedinCreds] = await db
-    .select({ id: scrapingCredentialsTable.id })
+    .select({ id: scrapingCredentialsTable.id, status: scrapingCredentialsTable.status, lastError: scrapingCredentialsTable.lastError })
     .from(scrapingCredentialsTable)
     .where(eq(scrapingCredentialsTable.provider, "linkedin"))
+    .orderBy(sql`${scrapingCredentialsTable.id} DESC`)
     .limit(1);
+  // Three-state credential status: "absent" (no row), "active", "expired".
+  const credStatus = (row: typeof apolloCreds | undefined) =>
+    !row ? "absent" : row.status;
   res.json({
     apollo: { configured: apolloConfigured() },
     csv: { configured: true },
-    apolloScraper: { configured: !!apolloCreds },
-    linkedinScraper: { configured: !!linkedinCreds },
+    apolloScraper: {
+      configured: !!apolloCreds,
+      status: credStatus(apolloCreds),
+      lastError: apolloCreds?.lastError ?? null,
+    },
+    linkedinScraper: {
+      configured: !!linkedinCreds,
+      status: credStatus(linkedinCreds),
+      lastError: linkedinCreds?.lastError ?? null,
+    },
   });
 });
 

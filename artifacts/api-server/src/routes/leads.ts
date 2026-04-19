@@ -275,6 +275,16 @@ router.post("/leads/:id/enrich", async (req, res): Promise<void> => {
     .set({
       emailValid: emailCheck.valid,
       emailValidationReason: emailCheck.reason,
+      // Promote scraped/locked status to "verified" once the email passes
+      // validation — this is what unlocks the lead for the sender pipeline.
+      // Leads with no email at all stay marked "needs_enrichment".
+      emailStatus: existing.email
+        ? emailCheck.valid
+          ? "verified"
+          : "invalid"
+        : "needs_enrichment",
+      // If validation succeeds the address is no longer locked.
+      emailLocked: existing.email && emailCheck.valid ? false : existing.emailLocked,
       isHiring: hiring.isHiring,
       intentSignal,
       websiteSummary: website.summary || null,

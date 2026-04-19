@@ -21,6 +21,11 @@ export const scrapingJobStatusEnum = pgEnum("scraping_job_status", [
   "cancelled",
 ]);
 
+export const scrapingCredentialStatusEnum = pgEnum("scraping_credential_status", [
+  "active",
+  "expired",
+]);
+
 /**
  * Stores encrypted session cookies / credentials per provider.
  * `encryptedPayload` is AES-256-GCM ciphertext (iv + tag + data, base64).
@@ -31,6 +36,7 @@ export const scrapingCredentialsTable = pgTable("scraping_credentials", {
   provider: scrapingProviderEnum("provider").notNull(),
   label: text("label"),
   encryptedPayload: text("encrypted_payload").notNull(),
+  status: scrapingCredentialStatusEnum("status").notNull().default("active"),
   lastValidatedAt: timestamp("last_validated_at", { withTimezone: true }),
   lastError: text("last_error"),
   createdAt: timestamp("created_at", { withTimezone: true })

@@ -125,10 +125,12 @@ export async function scrapeLinkedIn(
           .catch(() => null);
 
         if (!data || !data.firstName || !data.linkedinUrl) continue;
+        // Per-lead provenance: store the actual profile URL so an auditor can
+        // trace each scraped row back to its origin.
         results.push({
           ...data,
           linkedinUrl: data.linkedinUrl,
-          sourceUrl: page.url(),
+          sourceUrl: data.linkedinUrl,
         });
       }
 

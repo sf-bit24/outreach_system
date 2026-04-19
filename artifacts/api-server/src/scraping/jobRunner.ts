@@ -285,6 +285,20 @@ async function executeJob(jobId: number): Promise<void> {
       .where(eq(scrapingJobsTable.id, jobId));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
+    // If the session is no longer valid (login wall, captcha, expired cookie),
+    // flip the credential row to "expired" so the UI can prompt the user to
+    // re-import cookies and so we don't keep retrying with dead credentials.
+    if (/session expired|invalid|login|checkpoint|captcha/i.test(msg)) {
+      const provider = job.provider as Provider;
+      await db
+        .update(scrapingCredentialsTable)
+        .set({
+          status: "expired",
+          lastError: msg,
+          updatedAt: new Date(),
+        })
+        .where(eq(scrapingCredentialsTable.provider, provider));
+    }
     await db
       .update(scrapingJobsTable)
       .set({

@@ -369,18 +369,15 @@ export default function Leads() {
                   </td>
                   <td className="px-4 py-3 text-foreground">{lead.company}</td>
                   <td className="px-4 py-3 hidden md:table-cell">
-                    {lead.email ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-muted-foreground">{lead.email}</span>
-                        {lead.emailLocked && (
-                          <span
-                            title="Email verrouillé — non envoyable tant qu'il n'est pas vérifié"
-                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800"
-                          >
-                            <Lock className="w-3 h-3" /> verrouillé
-                          </span>
-                        )}
-                      </div>
+                    {lead.emailLocked ? (
+                      <span
+                        title="Email verrouillé par la source (Apollo masqué) — non envoyable tant qu'il n'est pas vérifié"
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800"
+                      >
+                        <Lock className="w-3 h-3" /> email verrouillé
+                      </span>
+                    ) : lead.email ? (
+                      <span className="text-muted-foreground">{lead.email}</span>
                     ) : (
                       <span
                         title="Aucun email — à enrichir avant l'envoi"
