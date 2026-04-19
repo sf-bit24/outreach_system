@@ -95,6 +95,12 @@ Niches prioritaires:
 
 Exemples:
 
+- Mapping placeholders recommandé:
+  - `[Entreprise]` → raison sociale (REQ/CRM)
+  - `[segment]` → secteur/verticale enrichi(e) (normalisation interne)
+  - `[domaine]` → spécialité métier (site web, profil public, qualification manuelle)
+  - `[type]` → catégorie de courtage (champ ICP/qualification)
+
 - Comptable: _« J’ai vu que [Entreprise] développe activement [segment]. Comment abordez-vous aujourd’hui l’acquisition de nouveaux mandats dans ce marché? »_
 - Firme de droit: _« Votre pratique en [domaine] est très visible. Seriez-vous ouvert à voir une approche d’outreach qui génère des discussions qualifiées sans augmenter la charge équipe? »_
 - Courtier: _« En courtage [type], la vitesse de contact est clé. Souhaitez-vous comparer votre processus actuel à une approche automatisée orientée prospects qualifiés? »_
