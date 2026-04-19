@@ -1,0 +1,27 @@
+# --- CONFIGURATION GENERALE ---
+ENVIRONMENT=development
+LOG_LEVEL=INFO
+
+# --- ACCES DONNEES (APOLLO, LINKEDIN, ETC) ---
+# Note: Utilisez des cookies ou des clés API gratuites si disponibles
+APOLLO_API_KEY=your_apollo_key_here
+LINKEDIN_COOKIES=your_linkedin_cookies_here
+SCRAPING_PROXY_URL=optional_proxy_url
+
+# --- MOTEUR IA (PERSONNALISATION) ---
+# OpenAI ou alternative compatible pour générer les accroches
+OPENAI_API_KEY=your_openai_key_here
+AI_MODEL=gpt-4o-mini
+
+# --- ENVOI COURRIEL (RESEND) ---
+RESEND_API_KEY=your_resend_key_here
+SENDER_EMAIL=contact@votre-domaine.com
+SENDER_NAME="Votre Nom"
+
+# --- BASE DE DONNEES ---
+DATABASE_URL=sqlite:///./outreach.db
+
+# --- LIMITES ET ETHIQUE ---
+MAX_EMAILS_PER_DAY=50
+DELAY_BETWEEN_EMAILS_MIN=300
+DELAY_BETWEEN_EMAILS_MAX=900
