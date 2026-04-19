@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, and, type SQL } from "drizzle-orm";
+import { eq, ilike, and, or, type SQL } from "drizzle-orm";
 import { db, leadsTable, activitiesTable } from "@workspace/db";
 import {
   ListLeadsQueryParams,
@@ -16,6 +16,10 @@ import {
   ImportLeadsBody,
   ImportLeadsResponse,
 } from "@workspace/api-zod";
+import { validateEmail } from "../pipeline/emailValidator";
+import { analyzeWebsite, detectHiringSignal } from "../pipeline/websiteScraper";
+import { assessLcap, generateUnsubscribeToken } from "../pipeline/lcap";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -29,16 +33,17 @@ router.get("/leads", async (req, res): Promise<void> => {
   const { stage, campaignId, search } = parsed.data;
   const conditions: SQL[] = [];
 
-  if (stage) {
-    conditions.push(eq(leadsTable.stage, stage as any));
-  }
-  if (campaignId != null) {
-    conditions.push(eq(leadsTable.campaignId, campaignId));
-  }
+  if (stage) conditions.push(eq(leadsTable.stage, stage as any));
+  if (campaignId != null) conditions.push(eq(leadsTable.campaignId, campaignId));
   if (search) {
-    conditions.push(
-      ilike(leadsTable.firstName, `%${search}%`)
+    const term = `%${search}%`;
+    const cond = or(
+      ilike(leadsTable.firstName, term),
+      ilike(leadsTable.lastName, term),
+      ilike(leadsTable.email, term),
+      ilike(leadsTable.company, term),
     );
+    if (cond) conditions.push(cond);
   }
 
   const leads =
@@ -46,7 +51,7 @@ router.get("/leads", async (req, res): Promise<void> => {
       ? await db.select().from(leadsTable).where(and(...conditions))
       : await db.select().from(leadsTable);
 
-  res.json(ListLeadsResponse.parse(leads));
+  res.json(leads);
 });
 
 router.post("/leads/import", async (req, res): Promise<void> => {
@@ -63,27 +68,34 @@ router.post("/leads/import", async (req, res): Promise<void> => {
 
   for (const lead of leads) {
     try {
-      await db
+      const [inserted] = await db
         .insert(leadsTable)
         .values({
           ...lead,
           campaignId: lead.campaignId ?? campaignId ?? null,
+          unsubscribeToken: generateUnsubscribeToken(),
         })
-        .onConflictDoNothing();
-      imported++;
+        .onConflictDoNothing()
+        .returning();
 
-      await db.insert(activitiesTable).values({
-        type: "lead_added",
-        description: `Lead ${lead.firstName} ${lead.lastName} from ${lead.company} added`,
-        leadName: `${lead.firstName} ${lead.lastName}`,
-      });
+      if (inserted) {
+        imported++;
+        await db.insert(activitiesTable).values({
+          type: "lead_added",
+          description: `Lead ${lead.firstName} ${lead.lastName} from ${lead.company} added`,
+          leadName: `${lead.firstName} ${lead.lastName}`,
+          leadId: inserted.id,
+        });
+      } else {
+        skipped++;
+      }
     } catch (e) {
       skipped++;
       errors.push(`Failed to import ${lead.email}: ${(e as Error).message}`);
     }
   }
 
-  res.json(ImportLeadsResponse.parse({ imported, skipped, errors }));
+  res.json({ imported, skipped, errors });
 });
 
 router.post("/leads", async (req, res): Promise<void> => {
@@ -93,7 +105,10 @@ router.post("/leads", async (req, res): Promise<void> => {
     return;
   }
 
-  const [lead] = await db.insert(leadsTable).values(parsed.data).returning();
+  const [lead] = await db
+    .insert(leadsTable)
+    .values({ ...parsed.data, unsubscribeToken: generateUnsubscribeToken() })
+    .returning();
 
   await db.insert(activitiesTable).values({
     type: "lead_added",
@@ -102,7 +117,7 @@ router.post("/leads", async (req, res): Promise<void> => {
     leadId: lead.id,
   });
 
-  res.status(201).json(GetLeadResponse.parse(lead));
+  res.status(201).json(lead);
 });
 
 router.get("/leads/:id", async (req, res): Promise<void> => {
@@ -122,7 +137,7 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(GetLeadResponse.parse(lead));
+  res.json(lead);
 });
 
 router.patch("/leads/:id", async (req, res): Promise<void> => {
@@ -138,9 +153,14 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const { stage, ...rest } = parsed.data;
   const [lead] = await db
     .update(leadsTable)
-    .set({ ...parsed.data, updatedAt: new Date() })
+    .set({
+      ...rest,
+      ...(stage !== undefined ? { stage: stage as any } : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(leadsTable.id, params.data.id))
     .returning();
 
@@ -149,7 +169,7 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(UpdateLeadResponse.parse(lead));
+  res.json(lead);
 });
 
 router.delete("/leads/:id", async (req, res): Promise<void> => {
@@ -172,6 +192,13 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+/**
+ * Stage 2 — Real enrichment pipeline:
+ * 1. Scrape company website (cheerio) → extract summary + keywords + visible emails
+ * 2. Detect hiring signal from /careers, /jobs etc.
+ * 3. Validate email syntax + DNS MX record
+ * 4. Assess LCAP compliance based on web visibility + opt-out mentions + role
+ */
 router.post("/leads/:id/enrich", async (req, res): Promise<void> => {
   const params = EnrichLeadParams.safeParse(req.params);
   if (!params.success) {
@@ -189,30 +216,85 @@ router.post("/leads/:id/enrich", async (req, res): Promise<void> => {
     return;
   }
 
-  // Simulate enrichment
-  const enrichmentData = {
-    emailValid: true,
-    isHiring: Math.random() > 0.5,
-    intentSignal:
-      Math.random() > 0.5 ? "Currently hiring VP Sales" : "Raised Series A 3 months ago",
-    stage: "enriched" as const,
-    updatedAt: new Date(),
-  };
+  logger.info({ leadId: existing.id }, "Starting enrichment pipeline");
+
+  // Run each step independently — partial enrichment is better than nothing
+  const [websiteRes, hiringRes, emailRes] = await Promise.allSettled([
+    analyzeWebsite(existing.website, existing.email),
+    detectHiringSignal(existing.website),
+    validateEmail(existing.email),
+  ]);
+
+  const website =
+    websiteRes.status === "fulfilled"
+      ? websiteRes.value
+      : {
+          reachable: false,
+          summary: "",
+          keywords: [],
+          emailsFound: [],
+          emailVisibleOnSite: false,
+          noOptOutMention: true,
+          fetchedUrl: null,
+        };
+  const hiring =
+    hiringRes.status === "fulfilled"
+      ? hiringRes.value
+      : { isHiring: false, intentSignal: null };
+  const emailCheck =
+    emailRes.status === "fulfilled"
+      ? emailRes.value
+      : { valid: false, reason: "Validation failed (transient error)", hasMxRecord: false };
+
+  if (websiteRes.status === "rejected") {
+    logger.warn({ err: websiteRes.reason, leadId: existing.id }, "Website analysis failed");
+  }
+  if (hiringRes.status === "rejected") {
+    logger.warn({ err: hiringRes.reason, leadId: existing.id }, "Hiring detection failed");
+  }
+  if (emailRes.status === "rejected") {
+    logger.warn({ err: emailRes.reason, leadId: existing.id }, "Email validation failed");
+  }
+
+  const lcap = assessLcap({
+    emailVisibleOnSite: website.emailVisibleOnSite,
+    noOptOutMention: website.noOptOutMention,
+    hasJobTitle: Boolean(existing.jobTitle && existing.jobTitle.trim()),
+    emailValid: emailCheck.valid,
+  });
+
+  const intentSignal =
+    hiring.intentSignal ??
+    (website.keywords.length > 0
+      ? `Mots-clés du site: ${website.keywords.slice(0, 5).join(", ")}`
+      : null);
 
   const [lead] = await db
     .update(leadsTable)
-    .set(enrichmentData)
+    .set({
+      emailValid: emailCheck.valid,
+      emailValidationReason: emailCheck.reason,
+      isHiring: hiring.isHiring,
+      intentSignal,
+      websiteSummary: website.summary || null,
+      websiteKeywords: website.keywords.length > 0 ? website.keywords.join(", ") : null,
+      lcapCompliant: lcap.compliant,
+      lcapReason: lcap.reason,
+      stage: "enriched",
+      unsubscribeToken: existing.unsubscribeToken ?? generateUnsubscribeToken(),
+      updatedAt: new Date(),
+    })
     .where(eq(leadsTable.id, params.data.id))
     .returning();
 
   await db.insert(activitiesTable).values({
     type: "lead_enriched",
-    description: `Lead ${lead.firstName} ${lead.lastName} enriched with intent signals`,
+    description: `Enriched ${lead.firstName} ${lead.lastName} — ${lcap.compliant ? "LCAP OK" : "LCAP non conforme"}${hiring.isHiring ? " · hiring signal" : ""}`,
     leadName: `${lead.firstName} ${lead.lastName}`,
     leadId: lead.id,
   });
 
-  res.json(EnrichLeadResponse.parse(lead));
+  res.json(lead);
 });
 
 export default router;

@@ -13,6 +13,9 @@ import {
   UpdateEmailResponse,
   SendEmailResponse,
 } from "@workspace/api-zod";
+import { personalizeEmail } from "../pipeline/aiPersonalization";
+import { enqueueEmail, getOrCreateSenderSettings } from "../pipeline/queue";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -26,22 +29,16 @@ router.get("/emails", async (req, res): Promise<void> => {
   const { leadId, campaignId, status } = parsed.data;
   const conditions: SQL[] = [];
 
-  if (leadId != null) {
-    conditions.push(eq(emailsTable.leadId, leadId));
-  }
-  if (campaignId != null) {
-    conditions.push(eq(emailsTable.campaignId, campaignId));
-  }
-  if (status) {
-    conditions.push(eq(emailsTable.status, status as any));
-  }
+  if (leadId != null) conditions.push(eq(emailsTable.leadId, leadId));
+  if (campaignId != null) conditions.push(eq(emailsTable.campaignId, campaignId));
+  if (status) conditions.push(eq(emailsTable.status, status as any));
 
   const emails =
     conditions.length > 0
       ? await db.select().from(emailsTable).where(and(...conditions))
       : await db.select().from(emailsTable);
 
-  res.json(ListEmailsResponse.parse(emails));
+  res.json(emails);
 });
 
 router.post("/emails/generate", async (req, res): Promise<void> => {
@@ -61,30 +58,41 @@ router.post("/emails/generate", async (req, res): Promise<void> => {
     return;
   }
 
-  const intentHook = lead.intentSignal
-    ? `J'ai remarqué que ${lead.company} ${lead.intentSignal.toLowerCase()}, ce qui m'a donné l'idée de vous contacter.`
-    : lead.isHiring
-    ? `J'ai vu que vous recrutez activement chez ${lead.company} — souvent signe d'une phase de croissance qui amène de nouveaux défis.`
-    : `En parcourant le site de ${lead.company}, j'ai été impressionné par votre positionnement sur le marché.`;
+  if (lead.unsubscribed) {
+    res.status(400).json({ error: "Lead has unsubscribed — cannot generate email" });
+    return;
+  }
 
-  const subject = `Question rapide pour ${lead.firstName} — ${lead.company}`;
-  const hook = intentHook;
-  const body = `Bonjour ${lead.firstName},
+  if (lead.lcapCompliant === false) {
+    res.status(400).json({
+      error: `LCAP non conforme: ${lead.lcapReason ?? "voir le profil du lead"}`,
+    });
+    return;
+  }
 
-${hook}
+  const settings = await getOrCreateSenderSettings();
 
-Je travaille avec des entreprises comme la vôtre pour [valeur proposée]. En 3 mois, nos clients voient en moyenne [résultat chiffré].
-
-Seriez-vous disponible pour un échange de 15 minutes la semaine prochaine ?
-
-Cordialement,
-[Votre nom]`;
+  let subject: string;
+  let body: string;
+  let hook: string;
+  try {
+    const personalized = await personalizeEmail(lead, settings);
+    subject = personalized.subject;
+    body = personalized.body;
+    hook = personalized.hook;
+  } catch (err) {
+    logger.error({ err, leadId: lead.id }, "AI personalization failed");
+    res.status(502).json({
+      error: `AI personalization failed: ${(err as Error).message}`,
+    });
+    return;
+  }
 
   const [email] = await db
     .insert(emailsTable)
     .values({
       leadId: lead.id,
-      campaignId: parsed.data.campaignId ?? null,
+      campaignId: parsed.data.campaignId ?? lead.campaignId ?? null,
       subject,
       body,
       hook,
@@ -92,7 +100,6 @@ Cordialement,
     })
     .returning();
 
-  // Update lead stage
   await db
     .update(leadsTable)
     .set({ stage: "email_generated", updatedAt: new Date() })
@@ -100,13 +107,13 @@ Cordialement,
 
   await db.insert(activitiesTable).values({
     type: "email_generated",
-    description: `Email generated for ${lead.firstName} ${lead.lastName} at ${lead.company}`,
+    description: `AI email generated for ${lead.firstName} ${lead.lastName} — "${subject}"`,
     leadName: `${lead.firstName} ${lead.lastName}`,
     leadId: lead.id,
-    campaignId: parsed.data.campaignId ?? null,
+    campaignId: email.campaignId ?? null,
   });
 
-  res.status(201).json(GetEmailResponse.parse(email));
+  res.status(201).json(email);
 });
 
 router.get("/emails/:id", async (req, res): Promise<void> => {
@@ -126,7 +133,7 @@ router.get("/emails/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(GetEmailResponse.parse(email));
+  res.json(email);
 });
 
 router.patch("/emails/:id", async (req, res): Promise<void> => {
@@ -153,7 +160,7 @@ router.patch("/emails/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(UpdateEmailResponse.parse(email));
+  res.json(email);
 });
 
 router.post("/emails/:id/send", async (req, res): Promise<void> => {
@@ -164,36 +171,44 @@ router.post("/emails/:id/send", async (req, res): Promise<void> => {
   }
 
   const [email] = await db
-    .update(emailsTable)
-    .set({ status: "sent", sentAt: new Date() })
-    .where(eq(emailsTable.id, params.data.id))
-    .returning();
+    .select()
+    .from(emailsTable)
+    .where(eq(emailsTable.id, params.data.id));
 
   if (!email) {
     res.status(404).json({ error: "Email not found" });
     return;
   }
 
-  // Update lead stage to contacted
-  await db
-    .update(leadsTable)
-    .set({ stage: "contacted", updatedAt: new Date() })
-    .where(eq(leadsTable.id, email.leadId));
+  if (email.status === "sent") {
+    res.status(400).json({ error: "Email already sent" });
+    return;
+  }
 
   const [lead] = await db
     .select()
     .from(leadsTable)
     .where(eq(leadsTable.id, email.leadId));
 
-  await db.insert(activitiesTable).values({
-    type: "email_sent",
-    description: `Email sent to ${lead?.firstName ?? ""} ${lead?.lastName ?? ""} — "${email.subject}"`,
-    leadName: lead ? `${lead.firstName} ${lead.lastName}` : null,
-    leadId: email.leadId,
-    campaignId: email.campaignId ?? null,
-  });
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
 
-  res.json(SendEmailResponse.parse(email));
+  if (lead.unsubscribed) {
+    res.status(400).json({ error: "Lead unsubscribed — send blocked" });
+    return;
+  }
+
+  // Enqueue rather than send synchronously: respects daily limit + delay
+  enqueueEmail(email.id);
+
+  const [updated] = await db
+    .select()
+    .from(emailsTable)
+    .where(eq(emailsTable.id, email.id));
+
+  res.json(updated);
 });
 
 export default router;

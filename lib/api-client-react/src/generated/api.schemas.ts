@@ -48,9 +48,26 @@ export interface Lead {
   /** @nullable */
   emailValid?: boolean | null;
   /** @nullable */
+  emailValidationReason?: string | null;
+  /** @nullable */
   isHiring?: boolean | null;
   /** @nullable */
   intentSignal?: string | null;
+  /** @nullable */
+  websiteSummary?: string | null;
+  /** @nullable */
+  websiteKeywords?: string | null;
+  /** @nullable */
+  painPoint?: string | null;
+  /** @nullable */
+  lcapCompliant?: boolean | null;
+  /** @nullable */
+  lcapReason?: string | null;
+  unsubscribed: boolean;
+  /** @nullable */
+  unsubscribedAt?: string | null;
+  /** @nullable */
+  lastContactedAt?: string | null;
   /** @nullable */
   notes?: string | null;
   /** @nullable */
@@ -155,10 +172,14 @@ export type EmailStatus = (typeof EmailStatus)[keyof typeof EmailStatus];
 
 export const EmailStatus = {
   draft: "draft",
+  queued: "queued",
   sent: "sent",
+  delivered: "delivered",
   opened: "opened",
   replied: "replied",
   bounced: "bounced",
+  failed: "failed",
+  unsubscribed: "unsubscribed",
 } as const;
 
 export interface Email {
@@ -172,11 +193,21 @@ export interface Email {
   hook?: string | null;
   status: EmailStatus;
   /** @nullable */
+  providerMessageId?: string | null;
+  /** @nullable */
+  errorMessage?: string | null;
+  /** @nullable */
+  scheduledAt?: string | null;
+  /** @nullable */
   sentAt?: string | null;
   /** @nullable */
   openedAt?: string | null;
   /** @nullable */
   repliedAt?: string | null;
+  /** @nullable */
+  deliveredAt?: string | null;
+  /** @nullable */
+  bouncedAt?: string | null;
   createdAt: string;
 }
 
@@ -208,6 +239,35 @@ export interface PipelineStage {
   stage: string;
   count: number;
   label: string;
+}
+
+export interface SenderSettings {
+  id: number;
+  senderName: string;
+  senderEmail: string;
+  senderCompany: string;
+  senderAddress: string;
+  pocMessage: string;
+  valueProposition: string;
+  dailyLimit: number;
+  delayMinSeconds: number;
+  delayMaxSeconds: number;
+  resendEnabled: boolean;
+  resendConfigured: boolean;
+  updatedAt: string;
+}
+
+export interface UpdateSenderSettingsBody {
+  senderName?: string;
+  senderEmail?: string;
+  senderCompany?: string;
+  senderAddress?: string;
+  pocMessage?: string;
+  valueProposition?: string;
+  dailyLimit?: number;
+  delayMinSeconds?: number;
+  delayMaxSeconds?: number;
+  resendEnabled?: boolean;
 }
 
 export type ActivityItemType =

@@ -32,9 +32,11 @@ import type {
   ListEmailsParams,
   ListLeadsParams,
   PipelineStage,
+  SenderSettings,
   UpdateCampaignBody,
   UpdateEmailBody,
   UpdateLeadBody,
+  UpdateSenderSettingsBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1891,6 +1893,168 @@ export function useGetPipeline<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get sender settings (LCAP identification + queue config)
+ */
+export const getGetSenderSettingsUrl = () => {
+  return `/api/settings/sender`;
+};
+
+export const getSenderSettings = async (
+  options?: RequestInit,
+): Promise<SenderSettings> => {
+  return customFetch<SenderSettings>(getGetSenderSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSenderSettingsQueryKey = () => {
+  return [`/api/settings/sender`] as const;
+};
+
+export const getGetSenderSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSenderSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSenderSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSenderSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSenderSettings>>
+  > = ({ signal }) => getSenderSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSenderSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSenderSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSenderSettings>>
+>;
+export type GetSenderSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get sender settings (LCAP identification + queue config)
+ */
+
+export function useGetSenderSettings<
+  TData = Awaited<ReturnType<typeof getSenderSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSenderSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSenderSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update sender settings
+ */
+export const getUpdateSenderSettingsUrl = () => {
+  return `/api/settings/sender`;
+};
+
+export const updateSenderSettings = async (
+  updateSenderSettingsBody: UpdateSenderSettingsBody,
+  options?: RequestInit,
+): Promise<SenderSettings> => {
+  return customFetch<SenderSettings>(getUpdateSenderSettingsUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateSenderSettingsBody),
+  });
+};
+
+export const getUpdateSenderSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSenderSettings>>,
+    TError,
+    { data: BodyType<UpdateSenderSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateSenderSettings>>,
+  TError,
+  { data: BodyType<UpdateSenderSettingsBody> },
+  TContext
+> => {
+  const mutationKey = ["updateSenderSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateSenderSettings>>,
+    { data: BodyType<UpdateSenderSettingsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateSenderSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateSenderSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateSenderSettings>>
+>;
+export type UpdateSenderSettingsMutationBody =
+  BodyType<UpdateSenderSettingsBody>;
+export type UpdateSenderSettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update sender settings
+ */
+export const useUpdateSenderSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSenderSettings>>,
+    TError,
+    { data: BodyType<UpdateSenderSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateSenderSettings>>,
+  TError,
+  { data: BodyType<UpdateSenderSettingsBody> },
+  TContext
+> => {
+  return useMutation(getUpdateSenderSettingsMutationOptions(options));
+};
 
 /**
  * @summary Get recent activity feed

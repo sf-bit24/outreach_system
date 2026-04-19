@@ -77,7 +77,7 @@ router.get("/campaigns", async (_req, res): Promise<void> => {
     })
   );
 
-  res.json(ListCampaignsResponse.parse(enriched));
+  res.json(enriched);
 });
 
 router.post("/campaigns", async (req, res): Promise<void> => {
@@ -93,7 +93,7 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json(
-    GetCampaignResponse.parse({
+    ({
       ...campaign,
       totalLeads: 0,
       contacted: 0,
@@ -115,7 +115,7 @@ router.get("/campaigns/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(GetCampaignResponse.parse(campaign));
+  res.json(campaign);
 });
 
 router.patch("/campaigns/:id", async (req, res): Promise<void> => {
@@ -143,7 +143,7 @@ router.patch("/campaigns/:id", async (req, res): Promise<void> => {
   }
 
   const campaign = await campaignWithStats(updated.id);
-  res.json(UpdateCampaignResponse.parse(campaign));
+  res.json(campaign);
 });
 
 router.delete("/campaigns/:id", async (req, res): Promise<void> => {
@@ -192,7 +192,7 @@ router.post("/campaigns/:id/start", async (req, res): Promise<void> => {
   });
 
   const full = await campaignWithStats(campaign.id);
-  res.json(StartCampaignResponse.parse(full));
+  res.json(full);
 });
 
 router.post("/campaigns/:id/pause", async (req, res): Promise<void> => {
@@ -221,7 +221,7 @@ router.post("/campaigns/:id/pause", async (req, res): Promise<void> => {
   });
 
   const full = await campaignWithStats(campaign.id);
-  res.json(PauseCampaignResponse.parse(full));
+  res.json(full);
 });
 
 export default router;

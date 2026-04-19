@@ -18,6 +18,8 @@ tags:
     description: Email generation and sending
   - name: dashboard
     description: Dashboard and analytics
+  - name: settings
+    description: Sender settings & configuration
 
 paths:
   /healthz:
@@ -448,6 +450,36 @@ paths:
                 items:
                   $ref: "#/components/schemas/PipelineStage"
 
+  /settings/sender:
+    get:
+      operationId: getSenderSettings
+      tags: [settings]
+      summary: Get sender settings (LCAP identification + queue config)
+      responses:
+        "200":
+          description: Sender settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SenderSettings"
+    patch:
+      operationId: updateSenderSettings
+      tags: [settings]
+      summary: Update sender settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSenderSettingsBody"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SenderSettings"
+
   /dashboard/activity:
     get:
       operationId: getActivity
@@ -513,9 +545,27 @@ components:
           enum: [raw, enriched, email_generated, contacted, replied, converted, unsubscribed]
         emailValid:
           type: ["boolean", "null"]
+        emailValidationReason:
+          type: ["string", "null"]
         isHiring:
           type: ["boolean", "null"]
         intentSignal:
+          type: ["string", "null"]
+        websiteSummary:
+          type: ["string", "null"]
+        websiteKeywords:
+          type: ["string", "null"]
+        painPoint:
+          type: ["string", "null"]
+        lcapCompliant:
+          type: ["boolean", "null"]
+        lcapReason:
+          type: ["string", "null"]
+        unsubscribed:
+          type: boolean
+        unsubscribedAt:
+          type: ["string", "null"]
+        lastContactedAt:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
@@ -533,6 +583,7 @@ components:
         - company
         - jobTitle
         - stage
+        - unsubscribed
         - createdAt
         - updatedAt
 
@@ -727,12 +778,22 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [draft, sent, opened, replied, bounced]
+          enum: [draft, queued, sent, delivered, opened, replied, bounced, failed, unsubscribed]
+        providerMessageId:
+          type: ["string", "null"]
+        errorMessage:
+          type: ["string", "null"]
+        scheduledAt:
+          type: ["string", "null"]
         sentAt:
           type: ["string", "null"]
         openedAt:
           type: ["string", "null"]
         repliedAt:
+          type: ["string", "null"]
+        deliveredAt:
+          type: ["string", "null"]
+        bouncedAt:
           type: ["string", "null"]
         createdAt:
           type: string
@@ -811,6 +872,74 @@ components:
         - stage
         - count
         - label
+
+    SenderSettings:
+      type: object
+      properties:
+        id:
+          type: integer
+        senderName:
+          type: string
+        senderEmail:
+          type: string
+        senderCompany:
+          type: string
+        senderAddress:
+          type: string
+        pocMessage:
+          type: string
+        valueProposition:
+          type: string
+        dailyLimit:
+          type: integer
+        delayMinSeconds:
+          type: integer
+        delayMaxSeconds:
+          type: integer
+        resendEnabled:
+          type: boolean
+        resendConfigured:
+          type: boolean
+        updatedAt:
+          type: string
+      required:
+        - id
+        - senderName
+        - senderEmail
+        - senderCompany
+        - senderAddress
+        - pocMessage
+        - valueProposition
+        - dailyLimit
+        - delayMinSeconds
+        - delayMaxSeconds
+        - resendEnabled
+        - resendConfigured
+        - updatedAt
+
+    UpdateSenderSettingsBody:
+      type: object
+      properties:
+        senderName:
+          type: string
+        senderEmail:
+          type: string
+        senderCompany:
+          type: string
+        senderAddress:
+          type: string
+        pocMessage:
+          type: string
+        valueProposition:
+          type: string
+        dailyLimit:
+          type: integer
+        delayMinSeconds:
+          type: integer
+        delayMaxSeconds:
+          type: integer
+        resendEnabled:
+          type: boolean
 
     ActivityItem:
       type: object

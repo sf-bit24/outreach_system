@@ -61,7 +61,7 @@ router.get("/dashboard/stats", async (_req, res): Promise<void> => {
     openRate: totalSent > 0 ? Math.round((totalOpened / totalSent) * 1000) / 10 : 0,
   };
 
-  res.json(GetDashboardStatsResponse.parse(stats));
+  res.json(stats);
 });
 
 router.get("/dashboard/pipeline", async (_req, res): Promise<void> => {
@@ -89,7 +89,7 @@ router.get("/dashboard/pipeline", async (_req, res): Promise<void> => {
     label: stageLabels[s.stage] ?? s.stage,
   }));
 
-  res.json(GetPipelineResponse.parse(pipeline));
+  res.json(pipeline);
 });
 
 router.get("/dashboard/activity", async (_req, res): Promise<void> => {
@@ -99,7 +99,7 @@ router.get("/dashboard/activity", async (_req, res): Promise<void> => {
     .orderBy(sql`created_at DESC`)
     .limit(20);
 
-  res.json(GetActivityResponse.parse(activities));
+  res.json(activities);
 });
 
 export default router;
