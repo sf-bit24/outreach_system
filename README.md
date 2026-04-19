@@ -29,6 +29,7 @@ Niches prioritaires:
 ### 4.2 Apollo.io (usage gratuit)
 
 - Approche recommandée: usage manuel ou API officielle/fonctionnalités natives dans les limites du plan gratuit.
+- Documenter précisément les capacités gratuites activées (endpoints API, crédits, exports) en s'appuyant sur la documentation officielle Apollo avant implémentation.
 - Utiliser des automatisations **uniquement** si autorisées par les CGU de la plateforme, avec limites de taux (rate limiting) strictes.
 - Interdire explicitement tout contournement technique des contrôles d’accès, quotas, ou mécanismes de protection.
 - Cibles: entreprise, contact, rôle, email professionnel (si disponible).
@@ -36,7 +37,7 @@ Niches prioritaires:
 ### 4.3 LinkedIn public
 
 - Collecte d'informations publiques pour enrichissement.
-- Usage responsable en respectant les CGU LinkedIn et la réglementation applicable (ex.: RGPD/Loi 25 au Québec selon le contexte de traitement).
+- Usage responsable en respectant les CGU LinkedIn et la réglementation applicable (ex.: RGPD / Loi 25 au Québec, « Loi modernisant des dispositions législatives en matière de protection des renseignements personnels », selon le contexte de traitement).
 - Privilégier la collecte manuelle, les exports autorisés ou les intégrations officiellement permises; éviter les méthodes interdites par les CGU.
 - Politique recommandée: minimisation des données, finalité explicite, conservation limitée, et suppression sur demande.
 
@@ -110,12 +111,6 @@ Exemples:
 ## 11. Références (sources mentionnées)
 
 - `quebec/req`: https://github.com/quebec/req
-- `scrapefulldotcom/apollo-scraper` (référence de recherche, conformité à vérifier): https://github.com/scrapefulldotcom/apollo-scraper
-- `FraneCal/apollo_scraper` (référence de recherche, conformité à vérifier): https://github.com/FraneCal/apollo_scraper
-- `liveupx/apollo-email-scraper` (référence de recherche, conformité à vérifier): https://github.com/liveupx/apollo-email-scraper
-- `maximo3k/apollo-search-scraper` (référence de recherche, conformité à vérifier): https://github.com/maximo3k/apollo-search-scraper
-- `joeyism/linkedin_scraper` (référence de recherche, conformité à vérifier): https://github.com/joeyism/linkedin_scraper
-- `dchrastil/ScrapedIn` (référence de recherche, conformité à vérifier): https://github.com/dchrastil/ScrapedIn
 - `JoshData/python-email-validator`: https://github.com/JoshData/python-email-validator
 - `BaseMax/EmailVerifier`: https://github.com/BaseMax/EmailVerifier
 - `ai-cold-email-generator`: https://github.com/topics/ai-cold-email-generator
