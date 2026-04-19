@@ -79,7 +79,7 @@ export async function scrapeApollo(
     const page = await context.newPage();
     const searchUrl = buildSearchUrl(params);
     await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
-    await jitterDelay(4000, 7000);
+    await jitterDelay(10000, 18000);
 
     // Detect login wall
     const loggedOut = await page
@@ -150,7 +150,7 @@ export async function scrapeApollo(
         const visible = await nextBtn.first().isVisible().catch(() => false);
         if (!visible) break;
         await nextBtn.first().click();
-        await jitterDelay(8000, 14000);
+        await jitterDelay(10000, 18000);
       }
     }
   } finally {

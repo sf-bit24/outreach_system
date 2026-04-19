@@ -337,9 +337,12 @@ router.post("/sources/apollo/import", async (req, res): Promise<void> => {
           campaignId,
           unsubscribeToken: generateUnsubscribeToken(),
           source: "apollo_api",
-          // Apollo-supplied emails are not pre-verified by us — force enrichment.
+          // Apollo-supplied emails are not pre-verified by us — they go through
+          // enrichment before sending. emailLocked stays false because the
+          // address itself is visible (not masked); the sender guard blocks
+          // them via emailStatus until enrichment marks them "verified".
           emailStatus: "scraped",
-          emailLocked: true,
+          emailLocked: false,
         })
         .onConflictDoNothing()
         .returning();

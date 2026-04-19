@@ -72,7 +72,7 @@ export async function scrapeLinkedIn(
     const page = await context.newPage();
     const searchUrl = buildSearchUrl(params);
     await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
-    await jitterDelay(5000, 9000);
+    await jitterDelay(8000, 15000);
 
     const loggedOut = page.url().includes("/login") || page.url().includes("/checkpoint");
     if (loggedOut) {
@@ -91,7 +91,7 @@ export async function scrapeLinkedIn(
 
       // Scroll down to trigger lazy load
       await page.evaluate(() => window.scrollBy(0, 1500));
-      await jitterDelay(2500, 4500);
+      await jitterDelay(8000, 12000);
 
       const rows = await page.$$('li.reusable-search__result-container, div.reusable-search__result-container');
       for (const row of rows) {
@@ -137,7 +137,7 @@ export async function scrapeLinkedIn(
       const visible = await nextBtn.first().isVisible().catch(() => false);
       if (!visible || results.length >= maxResults) break;
       await nextBtn.first().click();
-      await jitterDelay(10000, 18000);
+      await jitterDelay(12000, 22000);
       pageNum++;
     }
   } finally {
