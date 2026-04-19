@@ -28,13 +28,15 @@ Niches prioritaires:
 
 ### 4.2 Apollo.io (usage gratuit)
 
-- Utiliser des approches d'extraction open source pour récupérer des leads dans les limites légales et contractuelles applicables.
+- Utiliser des approches d'extraction open source **uniquement** dans le respect des CGU de la plateforme, des limites de taux (rate limiting) et des restrictions anti-automatisation applicables.
+- Interdire explicitement tout contournement technique des contrôles d’accès, quotas, ou mécanismes de protection.
 - Cibles: entreprise, contact, rôle, email professionnel (si disponible).
 
 ### 4.3 LinkedIn public
 
 - Collecte d'informations publiques pour enrichissement.
-- Usage responsable en respectant conditions d'utilisation et réglementation.
+- Usage responsable en respectant les CGU LinkedIn et la réglementation applicable (ex.: RGPD/Loi 25 au Québec selon le contexte de traitement).
+- Politique recommandée: minimisation des données, finalité explicite, conservation limitée, et suppression sur demande.
 
 ## 5. Enrichissement et validation email
 
