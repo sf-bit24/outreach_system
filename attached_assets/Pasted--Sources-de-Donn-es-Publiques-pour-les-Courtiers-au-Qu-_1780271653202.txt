@@ -1,0 +1,97 @@
+# Sources de Données Publiques pour les Courtiers au Québec et au Canada
+
+Ce document présente une liste exhaustive de **50 sources de données publiques** pour identifier et contacter des courtiers dans divers secteurs d'activité au Québec et à travers le Canada. Ces sources incluent des registres gouvernementaux, des associations professionnelles et des annuaires spécialisés.
+
+---
+
+## 1. Immobilier et Hypothécaire
+
+| # | Source | Description | Type de Données |
+|:---|:---|:---|:---|
+| 1 | **OACIQ (Registre des titulaires de permis)** | Registre officiel de tous les courtiers immobiliers du Québec. | Nom, Agence, Téléphone, Statut |
+| 2 | **APCIQ (Annuaire Centris)** | Association professionnelle regroupant plus de 14 000 courtiers. | Nom, Photo, Coordonnées, Région |
+| 3 | **RECA (Alberta)** | Real Estate Council of Alberta - Registre des courtiers en Alberta. | Nom, Entreprise, Discipline |
+| 4 | **BCFSA (Colombie-Britannique)** | Registre des services financiers et immobiliers de la BC. | Nom, Licence, Historique |
+| 5 | **RECO (Ontario)** | Real Estate Council of Ontario - Registre public des courtiers. | Nom, Statut, Employeur |
+| 6 | **FINTRAC (CANAFE)** | Registre des courtiers et prêteurs hypothécaires (conformité). | Nom de l'entité, Localisation |
+| 7 | **Mon-Proprio.ca** | Annuaire privé de mise en relation avec des courtiers au Québec. | Nom, Téléphone, Secteur |
+| 8 | **AMF (Registre des courtiers hypothécaires)** | Registre québécois pour le courtage hypothécaire. | Nom, Entreprise, Coordonnées |
+
+## 2. Assurance et Services Financiers
+
+| # | Source | Description | Type de Données |
+|:---|:---|:---|:---|
+| 9 | **AMF (Registre des entreprises et individus)** | Source ultime pour l'assurance et les valeurs mobilières au Québec. | Nom, Discipline, Téléphone |
+| 10 | **CHAD (Chambre de l'assurance de dommages)** | Vérification du statut des professionnels certifiés au Québec. | Nom, Cabinet, Spécialité |
+| 11 | **RCCAQ** | Regroupement des cabinets de courtage d'assurance du Québec. | Liste des cabinets membres |
+| 12 | **OCRI (Organisme canadien de réglementation des investissements)** | Registre des courtiers en placement et conseillers. | Nom, Entreprise, Historique |
+| 13 | **CSA (Autorités canadiennes en valeurs mobilières)** | Moteur de recherche national pour l'inscription des courtiers. | Nom, Province, Catégorie |
+| 14 | **BAC (Bureau d'assurance du Canada)** | Répertoire des membres en assurance de dommages. | Entreprise, Localisation |
+| 15 | **CSF (Chambre de la sécurité financière)** | Registre des membres en assurance de personnes et épargne. | Nom, Certificat, Discipline |
+| 16 | **CSI (Canadian Securities Institute)** | Bien que de formation, permet de retracer des professionnels certifiés. | Profils professionnels |
+
+## 3. Douanes, Transport et Logistique
+
+| # | Source | Description | Type de Données |
+|:---|:---|:---|:---|
+| 17 | **ASFC (Liste des courtiers en douane agréés)** | Liste officielle du gouvernement fédéral (Canada). | Nom, Courriel, Téléphone, Site web |
+| 18 | **CSCB (Société canadienne des courtiers en douane)** | Annuaire des membres de l'association nationale. | Entreprise, Contact, Localisation |
+| 19 | **FIATA (Directory Canada)** | Fédération internationale des associations de transitaires. | Entreprise, Coordonnées |
+| 20 | **Freightnet** | Annuaire mondial avec section spécifique pour le Canada. | Nom, Téléphone, Services |
+| 21 | **Zipments.io** | Répertoire de courtiers en douane pour les transporteurs. | Entreprise, Contact PARS/PAPS |
+| 22 | **Trucking Planet** | Répertoire des courtiers de fret licenciés au Canada. | Nom, Entreprise, Localisation |
+| 23 | **CIFFA** | Association canadienne des transitaires internationaux. | Répertoire des membres |
+
+## 4. Agriculture et Matières Premières
+
+| # | Source | Description | Type de Données |
+|:---|:---|:---|:---|
+| 24 | **Commission canadienne des grains** | Liste des compagnies de grains licenciées (courtiers/négociants). | Entreprise, Licence, Localisation |
+| 25 | **LIS Alberta (Livestock Dealer Search)** | Registre des courtiers en bétail en Alberta. | Nom, Agence, Téléphone |
+| 26 | **Gouvernement du Manitoba (Livestock Dealers)** | Liste PDF des courtiers en bétail licenciés. | Nom, Ville, Téléphone |
+| 27 | **CCIA (Canadian Cattle Identification Agency)** | Liste des marchands d'indicateurs animaux agréés. | Nom, Entreprise, Coordonnées |
+| 28 | **CME Group (Canadian Wheat Brokers)** | Annuaire des courtiers en contrats à terme sur le blé canadien. | Nom, Téléphone, Courriel |
+| 29 | **Régie de l'énergie du Québec** | Liste des courtiers en énergie (gaz naturel, électricité). | Entreprise, Contact |
+| 30 | **OEB (Ontario Energy Board)** | Registre des commerçants d'énergie licenciés en Ontario. | Nom commercial, Statut |
+
+## 5. Commerce Spécialisé (Art, Vin, Diamants, Yachts)
+
+| # | Source | Description | Type de Données |
+|:---|:---|:---|:---|
+| 31 | **ADAC (Art Dealers Association of Canada)** | Répertoire des courtiers et galeries d'art majeurs. | Galerie, Contact, Localisation |
+| 32 | **CADA (Antiquaires du Canada)** | Association des marchands d'antiquités (incluant le Québec). | Nom, Boutique, Téléphone |
+| 33 | **Diamond Bourse of Canada** | Liste des membres de la bourse du diamant (courtiers/négociants). | Entreprise, Contact |
+| 34 | **YachtWorld (Brokerage Québec)** | Plateforme majeure pour les courtiers en yachts et bateaux. | Nom du courtier, Agence, Téléphone |
+| 35 | **Marine 360** | Courtage spécialisé en bateaux de luxe au Québec. | Coordonnées de l'agence |
+| 36 | **Natalie MacLean (Wine Agents Canada)** | Annuaire très complet des agents/courtiers en vin. | Nom de l'agent, Téléphone |
+| 37 | **Kork.ca (Agences de vin Québec)** | Répertoire des agences représentant des produits à la SAQ. | Entreprise, Contact |
+| 38 | **Vinitor** | Exemple d'agence de courtage en vins et spiritueux. | Coordonnées directes |
+
+## 6. Entreprises, Franchises et M&A
+
+| # | Source | Description | Type de Données |
+|:---|:---|:---|:---|
+| 39 | **CFA (Canadian Franchise Association)** | Annuaire des conseillers et courtiers en franchise. | Nom, Entreprise, Spécialité |
+| 40 | **IBBA (International Business Brokers Association)** | Section Canada/Québec des courtiers en entreprises. | Nom, Certification, Téléphone |
+| 41 | **Axial** | Plateforme de mise en relation pour les courtiers en M&A. | Profil d'entreprise, Secteur |
+| 42 | **Acquizition.biz** | Répertoire de courtiers spécialisés en vente d'entreprises au Québec. | Nom, Courriel, Téléphone |
+| 43 | **REQ (Registraire des entreprises du Québec)** | Recherche par mot-clé "Courtage" pour trouver toutes les entreprises. | Nom légal, Adresse, Administrateurs |
+| 44 | **Pages Jaunes (Canada/Québec)** | Recherche par catégories spécifiques (ex: "Courtier"). | Téléphone, Adresse |
+
+## 7. Divers et Services Professionnels
+
+| # | Source | Description | Type de Données |
+|:---|:---|:---|:---|
+| 45 | **ACTA (Association canadienne des agences de voyages)** | Répertoire des agents et courtiers en voyages. | Agence, Localisation |
+| 46 | **TICO (Ontario)** | Registre des agences de voyages et conseillers en Ontario. | Nom, Statut de licence |
+| 47 | **Clutch.co (Advertising Agencies Canada)** | Répertoire des courtiers en publicité et marketing. | Nom, Avis, Contact |
+| 48 | **Dexigner** | Annuaire des agences de design et publicité au Canada. | Entreprise, Site web |
+| 49 | **NHLA (Lumber Exporters)** | Liste des exportateurs et courtiers en bois d'œuvre. | Entreprise, Téléphone |
+| 50 | **Open Government Canada** | Portails de données ouvertes (recherche "Brokers"). | Diverses listes statistiques et répertoires |
+
+---
+
+### Conseils pour l'extraction de données :
+* **Respect de la vie privée :** Assurez-vous de respecter la *Loi sur la protection des renseignements personnels dans le secteur privé* au Québec.
+* **Format des données :** Beaucoup de ces sources proposent des fichiers PDF ou des moteurs de recherche. Des outils de "web scraping" ou des services d'extraction de données peuvent être nécessaires pour automatiser la collecte.
+* **Validation :** Priorisez toujours les registres gouvernementaux (AMF, OACIQ, ASFC) pour garantir que le courtier est légalement autorisé à exercer.

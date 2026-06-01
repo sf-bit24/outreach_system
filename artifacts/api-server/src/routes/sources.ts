@@ -553,4 +553,122 @@ router.post("/sources/csv/import", async (req, res): Promise<void> => {
   res.json({ imported, skipped, errors: errors.slice(0, 50) });
 });
 
+/* ────────────────────── ASFC CUSTOMS BROKERS ────────────────────── */
+
+const ASFC_URL =
+  "https://www.cbsa-asfc.gc.ca/services/cb-cd/cb-cd-fra.html";
+
+/**
+ * Parse the CBSA/ASFC customs-broker HTML page.
+ * The page contains a single <table> with three columns:
+ *   Nom | Site Web | Adresse courriel
+ * Both website and email cells may contain an <a> tag or the literal "Sans objet".
+ */
+async function fetchAsfcLeads(): Promise<
+  Array<{ company: string; website: string | null; email: string | null }>
+> {
+  const cheerio = await import("cheerio");
+  const response = await fetch(ASFC_URL, {
+    headers: {
+      "Accept-Language": "fr-CA,fr;q=0.9,en;q=0.5",
+      "User-Agent":
+        "Mozilla/5.0 (compatible; OutreachIQ-Importer/1.0; +https://outreachiq.local)",
+    },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} depuis l'ASFC`);
+  }
+  const html = await response.text();
+  const $ = cheerio.load(html);
+  const results: Array<{ company: string; website: string | null; email: string | null }> = [];
+
+  $("table tr").each((_i, row) => {
+    const cells = $(row).find("td");
+    if (cells.length < 3) return;
+
+    const company = $(cells[0]).text().replace(/\s+/g, " ").trim();
+    if (!company) return;
+
+    const websiteAnchor = $(cells[1]).find("a").first();
+    const website = websiteAnchor.length ? (websiteAnchor.attr("href") ?? null) : null;
+
+    const emailAnchor = $(cells[2]).find("a[href^='mailto:']").first();
+    let email: string | null = null;
+    if (emailAnchor.length) {
+      const raw = emailAnchor.attr("href")?.replace(/^mailto:/i, "").trim() ?? "";
+      email = raw.length > 0 ? raw.toLowerCase() : null;
+    }
+
+    results.push({ company, website, email });
+  });
+
+  return results;
+}
+
+/** POST /api/sources/asfc/import — import all CBSA-licensed customs brokers */
+router.post("/sources/asfc/import", async (req, res): Promise<void> => {
+  let rows: Awaited<ReturnType<typeof fetchAsfcLeads>>;
+  try {
+    rows = await fetchAsfcLeads();
+  } catch (err) {
+    req.log.error({ err }, "ASFC fetch failed");
+    res.status(502).json({
+      error: `Impossible de télécharger la liste ASFC : ${err instanceof Error ? err.message : String(err)}`,
+    });
+    return;
+  }
+
+  if (rows.length === 0) {
+    res.status(502).json({ error: "La page ASFC n'a retourné aucune donnée — structure peut-être modifiée." });
+    return;
+  }
+
+  let imported = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const row of rows) {
+    if (!row.email) {
+      skipped++;
+      continue;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+      skipped++;
+      errors.push(`Email invalide ignoré : ${row.email} (${row.company})`);
+      continue;
+    }
+
+    try {
+      const [inserted] = await db
+        .insert(leadsTable)
+        .values({
+          firstName: "Contact",
+          lastName: row.company.slice(0, 100),
+          email: row.email,
+          company: row.company,
+          jobTitle: "Courtier en douane agréé",
+          website: row.website ?? null,
+          industry: "Douanes & Logistique",
+          source: "asfc",
+          sourceUrl: ASFC_URL,
+          emailStatus: "scraped",
+          emailLocked: false,
+          unsubscribeToken: generateUnsubscribeToken(),
+        })
+        .onConflictDoNothing()
+        .returning();
+      if (inserted) imported++;
+      else skipped++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${row.email}: ${msg}`);
+      skipped++;
+    }
+  }
+
+  req.log.info({ imported, skipped }, "ASFC import complete");
+  res.json({ imported, skipped, total: rows.length, errors: errors.slice(0, 50) });
+});
+
 export default router;

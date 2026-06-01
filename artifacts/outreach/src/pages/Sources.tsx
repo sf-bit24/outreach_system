@@ -11,6 +11,7 @@ import {
   Cookie,
   Loader2,
   RefreshCw,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,6 +88,10 @@ export default function Sources() {
   const [csvText, setCsvText] = useState("");
   const [importing, setImporting] = useState(false);
   const [lastResult, setLastResult] = useState<ImportResult | null>(null);
+
+  // ASFC import
+  const [asfcImporting, setAsfcImporting] = useState(false);
+  const [asfcResult, setAsfcResult] = useState<(ImportResult & { total?: number }) | null>(null);
 
   // Scraper credential forms
   const [apolloCookies, setApolloCookies] = useState("");
@@ -171,6 +176,33 @@ export default function Sources() {
     if (!file) return;
     const text = await file.text();
     setCsvText(text);
+  }
+
+  async function handleAsfcImport() {
+    setAsfcImporting(true);
+    setAsfcResult(null);
+    try {
+      const res = await fetch(`${import.meta.env.BASE_URL}api/sources/asfc/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Échec de l'import ASFC");
+      setAsfcResult(data);
+      qc.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+      toast({
+        title: "Import ASFC terminé",
+        description: `${data.imported} courtiers importés, ${data.skipped} ignorés.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Erreur ASFC",
+        description: err instanceof Error ? err.message : "Erreur inconnue",
+        variant: "destructive",
+      });
+    } finally {
+      setAsfcImporting(false);
+    }
   }
 
   async function saveCookies(provider: "apollo" | "linkedin", raw: string) {
@@ -516,6 +548,64 @@ export default function Sources() {
           <Search className="w-4 h-4 mr-2" />
           Lancer le scraping LinkedIn
         </Button>
+      </section>
+
+      {/* ASFC — Courtiers en douane agréés */}
+      <section className="bg-card border border-border rounded-lg p-6 mb-6">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+            <Globe className="w-5 h-5 text-emerald-600" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-base font-semibold">ASFC — Courtiers en douane agréés (Canada)</h2>
+            <p className="text-sm text-muted-foreground">
+              Liste officielle du gouvernement canadien (~416 entreprises, ~380 emails publiés). Mise à jour régulière.
+              Source : <code className="text-xs bg-muted px-1 rounded">cbsa-asfc.gc.ca</code>
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-md bg-emerald-50 border border-emerald-200 p-3 mb-4 flex items-start gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-emerald-900">
+            <strong>Emails gouvernementaux publiés.</strong> Ces adresses sont publiées officiellement par l'ASFC — elles restent
+            marquées <code className="mx-1 bg-white/60 px-1 rounded">scraped</code> et bloquées jusqu'à vérification
+            via enrichissement avant tout envoi.
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <Button onClick={handleAsfcImport} disabled={asfcImporting} variant="outline">
+            {asfcImporting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Import en cours…
+              </>
+            ) : (
+              <>
+                <Globe className="w-4 h-4 mr-2" />
+                Importer depuis l'ASFC
+              </>
+            )}
+          </Button>
+          {asfcResult && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="w-4 h-4 text-green-600" />
+              <span>
+                <strong className="text-foreground">{asfcResult.imported}</strong> importés
+                {asfcResult.total != null && ` sur ${asfcResult.total} trouvés`}
+                {asfcResult.skipped > 0 && `, ${asfcResult.skipped} ignorés`}
+              </span>
+            </div>
+          )}
+        </div>
+        {asfcResult && asfcResult.errors.length > 0 && (
+          <div className="mt-3 p-2 bg-muted/50 rounded text-xs font-mono space-y-0.5">
+            {asfcResult.errors.map((e, i) => (
+              <div key={i} className="text-red-700">{e}</div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Jobs Feed */}
