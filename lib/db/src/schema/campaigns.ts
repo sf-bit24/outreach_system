@@ -5,6 +5,7 @@ import {
   timestamp,
   integer,
   pgEnum,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -16,6 +17,16 @@ export const campaignStatusEnum = pgEnum("campaign_status", [
   "completed",
 ]);
 
+/**
+ * One step in a follow-up sequence.
+ * delayDays: days after the previous step to wait before sending.
+ */
+export interface SequenceStep {
+  delayDays: number;
+  subject: string;
+  body: string;
+}
+
 export const campaignsTable = pgTable("campaigns", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -25,6 +36,8 @@ export const campaignsTable = pgTable("campaigns", {
   emailTemplate: text("email_template"),
   sendingDelayMinutes: integer("sending_delay_minutes").notNull().default(60),
   dailyLimit: integer("daily_limit").notNull().default(50),
+  /** Optional follow-up steps — each fires after delayDays from the prior send. */
+  sequenceSteps: jsonb("sequence_steps").$type<SequenceStep[]>(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

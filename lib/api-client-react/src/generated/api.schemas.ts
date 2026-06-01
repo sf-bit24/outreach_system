@@ -130,6 +130,13 @@ export interface ImportLeadsResult {
   errors: string[];
 }
 
+export interface SequenceStep {
+  /** Days after previous step before sending this one */
+  delayDays: number;
+  subject: string;
+  body: string;
+}
+
 export type CampaignStatus =
   (typeof CampaignStatus)[keyof typeof CampaignStatus];
 
@@ -152,6 +159,8 @@ export interface Campaign {
   emailTemplate?: string | null;
   sendingDelayMinutes: number;
   dailyLimit: number;
+  /** @nullable */
+  sequenceSteps?: SequenceStep[] | null;
   totalLeads: number;
   contacted: number;
   replied: number;
@@ -166,6 +175,7 @@ export interface CreateCampaignBody {
   emailTemplate?: string;
   sendingDelayMinutes?: number;
   dailyLimit?: number;
+  sequenceSteps?: SequenceStep[];
 }
 
 export interface UpdateCampaignBody {
@@ -176,6 +186,7 @@ export interface UpdateCampaignBody {
   emailTemplate?: string;
   sendingDelayMinutes?: number;
   dailyLimit?: number;
+  sequenceSteps?: SequenceStep[];
 }
 
 export type EmailStatus = (typeof EmailStatus)[keyof typeof EmailStatus];
@@ -218,6 +229,16 @@ export interface Email {
   deliveredAt?: string | null;
   /** @nullable */
   bouncedAt?: string | null;
+  /**
+   * 0 = initial send, 1+ = follow-up step index. null if not part of a sequence.
+   * @nullable
+   */
+  sequenceStepIndex?: number | null;
+  /**
+   * ID of the initial email in the sequence chain
+   * @nullable
+   */
+  parentEmailId?: number | null;
   createdAt: string;
 }
 
@@ -251,6 +272,15 @@ export interface PipelineStage {
   label: string;
 }
 
+export type SenderSettingsTransportMode =
+  (typeof SenderSettingsTransportMode)[keyof typeof SenderSettingsTransportMode];
+
+export const SenderSettingsTransportMode = {
+  simulation: "simulation",
+  resend: "resend",
+  smtp: "smtp",
+} as const;
+
 export interface SenderSettings {
   id: number;
   senderName: string;
@@ -264,6 +294,21 @@ export interface SenderSettings {
   delayMaxSeconds: number;
   resendEnabled: boolean;
   resendConfigured: boolean;
+  transportMode: SenderSettingsTransportMode;
+  /** @nullable */
+  smtpHost?: string | null;
+  /** @nullable */
+  smtpPort?: number | null;
+  /** @nullable */
+  smtpUser?: string | null;
+  smtpConfigured: boolean;
+  warmupEnabled: boolean;
+  /** @nullable */
+  warmupStartDate?: string | null;
+  warmupStartVolume: number;
+  warmupIncrement: number;
+  warmupMaxVolume: number;
+  warmupEffectiveLimit: number;
   updatedAt: string;
 }
 
@@ -278,6 +323,17 @@ export interface UpdateSenderSettingsBody {
   delayMinSeconds?: number;
   delayMaxSeconds?: number;
   resendEnabled?: boolean;
+  transportMode?: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpUser?: string;
+  /** Mot de passe SMTP en clair — chiffré AES-256-GCM avant stockage. Omettre pour conserver l'existant. */
+  smtpPass?: string;
+  warmupEnabled?: boolean;
+  warmupStartDate?: string;
+  warmupStartVolume?: number;
+  warmupIncrement?: number;
+  warmupMaxVolume?: number;
 }
 
 export type ActivityItemType =
@@ -325,4 +381,15 @@ export type ListEmailsParams = {
    */
   campaignId?: number | null;
   status?: string;
+};
+
+export type TestSenderSettingsBody = {
+  /** Override recipient (defaults to senderEmail) */
+  to?: string;
+};
+
+export type TestSenderSettings200 = {
+  success: boolean;
+  message: string;
+  providerMessageId?: string;
 };

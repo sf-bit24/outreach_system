@@ -10,6 +10,7 @@ import Campaigns from "@/pages/Campaigns";
 import CampaignDetail from "@/pages/CampaignDetail";
 import Emails from "@/pages/Emails";
 import Sources from "@/pages/Sources";
+import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -32,6 +33,7 @@ function Router() {
         <Route path="/campaigns" component={Campaigns} />
         <Route path="/campaigns/:id" component={CampaignDetail} />
         <Route path="/emails" component={Emails} />
+        <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

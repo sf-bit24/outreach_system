@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+import multer from "multer";
+import AdmZip from "adm-zip";
 import { db, leadsTable } from "@workspace/db";
 import {
   scrapingCredentialsTable,
@@ -17,6 +19,11 @@ import { encryptJson } from "../scraping/crypto";
 import { runJobInBackground } from "../scraping/jobRunner";
 
 const router: IRouter = Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 350 * 1024 * 1024 },
+});
 
 function asString(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
@@ -670,5 +677,162 @@ router.post("/sources/asfc/import", async (req, res): Promise<void> => {
   req.log.info({ imported, skipped }, "ASFC import complete");
   res.json({ imported, skipped, total: rows.length, errors: errors.slice(0, 50) });
 });
+
+// ─── REQ — Registre des entreprises du Québec ───────────────────────────────
+
+function parseReqCsv(content: string): Record<string, string>[] {
+  const lines = content.split(/\r?\n/);
+  if (lines.length < 2) return [];
+
+  const raw = lines[0];
+  const sep = raw.includes(";") ? ";" : ",";
+  const headers = raw.split(sep).map((h) => h.trim().replace(/^"|"$/g, "").toUpperCase());
+
+  const rows: Record<string, string>[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const cells = splitCsvLine(line, sep);
+    if (cells.length === 0) continue;
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => {
+      row[h] = (cells[idx] ?? "").replace(/^"|"$/g, "").trim();
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
+function splitCsvLine(line: string, sep: string): string[] {
+  const cells: string[] = [];
+  let cur = "";
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      inQuote = !inQuote;
+    } else if (ch === sep && !inQuote) {
+      cells.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  cells.push(cur);
+  return cells;
+}
+
+function pick2(row: Record<string, string>, ...keys: string[]): string {
+  for (const k of keys) {
+    const v = row[k] ?? row[k.toLowerCase()];
+    if (v && v.trim()) return v.trim();
+  }
+  return "";
+}
+
+router.post(
+  "/sources/req/import",
+  upload.single("file"),
+  async (req, res): Promise<void> => {
+    if (!req.file) {
+      res.status(400).json({ error: "Fichier ZIP requis (champ : file)" });
+      return;
+    }
+
+    const maxLeads = Number(req.body?.maxLeads) || 0;
+
+    let zip: AdmZip;
+    try {
+      zip = new AdmZip(req.file.buffer);
+    } catch {
+      res.status(400).json({ error: "Fichier ZIP invalide ou corrompu" });
+      return;
+    }
+
+    const entry =
+      zip.getEntry("Entreprise.csv") ??
+      zip.getEntry("entreprise.csv") ??
+      zip.getEntries().find(
+        (e) => e.entryName.toLowerCase().endsWith("entreprise.csv"),
+      );
+
+    if (!entry) {
+      const names = zip
+        .getEntries()
+        .slice(0, 20)
+        .map((e) => e.entryName)
+        .join(", ");
+      res.status(400).json({
+        error: `Fichier Entreprise.csv introuvable dans le ZIP. Fichiers trouvés : ${names}`,
+      });
+      return;
+    }
+
+    const csvContent = entry.getData().toString("utf-8");
+    const rows = parseReqCsv(csvContent);
+
+    if (rows.length === 0) {
+      res.status(400).json({ error: "Entreprise.csv vide ou format non reconnu" });
+      return;
+    }
+
+    let imported = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+    const slice = maxLeads > 0 ? rows.slice(0, maxLeads) : rows;
+
+    for (const row of slice) {
+      const etat = pick2(row, "ETAT_IMMAT", "ETAT_IMMATRICULATION", "STATUT");
+      if (etat && etat.toUpperCase() !== "IMMAT") {
+        skipped++;
+        continue;
+      }
+
+      const companyName =
+        pick2(row, "NOM_PERS_MORALE", "NOM_COMM", "NOM_ENTR", "NOM") ||
+        pick2(row, "NAME");
+      if (!companyName) {
+        skipped++;
+        continue;
+      }
+
+      const neq = pick2(row, "NEQ", "NO_NEQ", "NEQ_ENTR");
+      const city = pick2(row, "ADR_DOMICILE_VILLE", "VILLE", "MUNICIPALITE");
+      const province = pick2(row, "ADR_DOMICILE_PROVINCE", "PROVINCE") || "QC";
+      const website = pick2(row, "SITE_INTERNET", "SITE_WEB", "URL");
+      const location = [city, province].filter(Boolean).join(", ");
+
+      try {
+        const [inserted] = await db
+          .insert(leadsTable)
+          .values({
+            firstName: companyName.slice(0, 255),
+            lastName: neq ? `(NEQ ${neq})` : "",
+            email: null,
+            company: companyName.slice(0, 255),
+            jobTitle: "Entreprise (REQ)",
+            website: website || null,
+            location: location || null,
+            industry: "REQ — Registre des entreprises",
+            source: "req",
+            emailStatus: "needs_enrichment",
+            emailLocked: false,
+            unsubscribeToken: generateUnsubscribeToken(),
+          })
+          .onConflictDoNothing()
+          .returning();
+        if (inserted) imported++;
+        else skipped++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (errors.length < 50) errors.push(`${companyName}: ${msg}`);
+        skipped++;
+      }
+    }
+
+    req.log.info({ imported, skipped, total: slice.length }, "REQ import complete");
+    res.json({ imported, skipped, total: slice.length, errors });
+  },
+);
 
 export default router;

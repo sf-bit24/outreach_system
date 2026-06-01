@@ -25,6 +25,19 @@ export const senderSettingsTable = pgTable("sender_settings", {
   delayMinSeconds: integer("delay_min_seconds").notNull().default(60),
   delayMaxSeconds: integer("delay_max_seconds").notNull().default(180),
   resendEnabled: boolean("resend_enabled").notNull().default(false),
+
+  transportMode: text("transport_mode").notNull().default("simulation"),
+  smtpHost: text("smtp_host"),
+  smtpPort: integer("smtp_port"),
+  smtpUser: text("smtp_user"),
+  smtpPassEncrypted: text("smtp_pass_encrypted"),
+
+  warmupEnabled: boolean("warmup_enabled").notNull().default(false),
+  warmupStartDate: timestamp("warmup_start_date", { withTimezone: true }),
+  warmupStartVolume: integer("warmup_start_volume").notNull().default(5),
+  warmupIncrement: integer("warmup_increment").notNull().default(5),
+  warmupMaxVolume: integer("warmup_max_volume").notNull().default(50),
+
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()

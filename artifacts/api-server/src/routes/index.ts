@@ -7,6 +7,7 @@ import dashboardRouter from "./dashboard";
 import settingsRouter from "./settings";
 import complianceRouter from "./compliance";
 import sourcesRouter from "./sources";
+import webhooksRouter from "./webhooks";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(dashboardRouter);
 router.use(settingsRouter);
 router.use(complianceRouter);
 router.use(sourcesRouter);
+router.use(webhooksRouter);
 
 export default router;

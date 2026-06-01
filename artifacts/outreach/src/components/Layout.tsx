@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Users, Megaphone, Mail, Zap, Database } from "lucide-react";
+import { LayoutDashboard, Users, Megaphone, Mail, Zap, Database, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -8,6 +8,7 @@ const navItems = [
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/emails", label: "Emails", icon: Mail },
+  { href: "/settings", label: "Paramètres", icon: Settings },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -30,9 +31,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               href === "/" ? location === "/" : location.startsWith(href);
             return (
               <Link key={href} href={href}>
-                <a
+                <div
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                    "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer",
                     isActive
                       ? "bg-sidebar-primary text-sidebar-primary-foreground"
                       : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
@@ -40,7 +41,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 >
                   <Icon className="w-4 h-4 flex-shrink-0" />
                   {label}
-                </a>
+                </div>
               </Link>
             );
           })}

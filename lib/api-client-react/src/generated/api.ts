@@ -33,6 +33,8 @@ import type {
   ListLeadsParams,
   PipelineStage,
   SenderSettings,
+  TestSenderSettings200,
+  TestSenderSettingsBody,
   UpdateCampaignBody,
   UpdateEmailBody,
   UpdateLeadBody,
@@ -2054,6 +2056,92 @@ export const useUpdateSenderSettings = <
   TContext
 > => {
   return useMutation(getUpdateSenderSettingsMutationOptions(options));
+};
+
+/**
+ * @summary Send a test email via current transport configuration
+ */
+export const getTestSenderSettingsUrl = () => {
+  return `/api/settings/sender/test`;
+};
+
+export const testSenderSettings = async (
+  testSenderSettingsBody?: TestSenderSettingsBody,
+  options?: RequestInit,
+): Promise<TestSenderSettings200> => {
+  return customFetch<TestSenderSettings200>(getTestSenderSettingsUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(testSenderSettingsBody),
+  });
+};
+
+export const getTestSenderSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof testSenderSettings>>,
+    TError,
+    { data: BodyType<TestSenderSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof testSenderSettings>>,
+  TError,
+  { data: BodyType<TestSenderSettingsBody> },
+  TContext
+> => {
+  const mutationKey = ["testSenderSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof testSenderSettings>>,
+    { data: BodyType<TestSenderSettingsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return testSenderSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TestSenderSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof testSenderSettings>>
+>;
+export type TestSenderSettingsMutationBody = BodyType<TestSenderSettingsBody>;
+export type TestSenderSettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send a test email via current transport configuration
+ */
+export const useTestSenderSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof testSenderSettings>>,
+    TError,
+    { data: BodyType<TestSenderSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof testSenderSettings>>,
+  TError,
+  { data: BodyType<TestSenderSettingsBody> },
+  TContext
+> => {
+  return useMutation(getTestSenderSettingsMutationOptions(options));
 };
 
 /**

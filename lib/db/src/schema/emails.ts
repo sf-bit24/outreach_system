@@ -38,6 +38,10 @@ export const emailsTable = pgTable("emails", {
   openedAt: timestamp("opened_at", { withTimezone: true }),
   repliedAt: timestamp("replied_at", { withTimezone: true }),
   bouncedAt: timestamp("bounced_at", { withTimezone: true }),
+  /** Index within the campaign sequence (0 = initial, 1+ = follow-ups). NULL = not part of a sequence. */
+  sequenceStepIndex: integer("sequence_step_index"),
+  /** ID of the initial email in the sequence chain. NULL for step 0. */
+  parentEmailId: integer("parent_email_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

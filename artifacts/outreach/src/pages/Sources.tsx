@@ -93,6 +93,12 @@ export default function Sources() {
   const [asfcImporting, setAsfcImporting] = useState(false);
   const [asfcResult, setAsfcResult] = useState<(ImportResult & { total?: number }) | null>(null);
 
+  // REQ import
+  const [reqImporting, setReqImporting] = useState(false);
+  const [reqResult, setReqResult] = useState<(ImportResult & { total?: number }) | null>(null);
+  const [reqFile, setReqFile] = useState<File | null>(null);
+  const [reqMaxLeads, setReqMaxLeads] = useState(5000);
+
   // Scraper credential forms
   const [apolloCookies, setApolloCookies] = useState("");
   const [linkedinCookies, setLinkedinCookies] = useState("");
@@ -202,6 +208,40 @@ export default function Sources() {
       });
     } finally {
       setAsfcImporting(false);
+    }
+  }
+
+  async function handleReqImport() {
+    if (!reqFile) {
+      toast({ title: "Fichier manquant", description: "Sélectionnez le fichier ZIP du REQ.", variant: "destructive" });
+      return;
+    }
+    setReqImporting(true);
+    setReqResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", reqFile);
+      if (reqMaxLeads > 0) formData.append("maxLeads", String(reqMaxLeads));
+      const res = await fetch(`${import.meta.env.BASE_URL}api/sources/req/import`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Échec de l'import REQ");
+      setReqResult(data);
+      qc.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+      toast({
+        title: "Import REQ terminé",
+        description: `${data.imported} entreprises importées, ${data.skipped} ignorées.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Erreur REQ",
+        description: err instanceof Error ? err.message : "Erreur inconnue",
+        variant: "destructive",
+      });
+    } finally {
+      setReqImporting(false);
     }
   }
 
@@ -602,6 +642,88 @@ export default function Sources() {
         {asfcResult && asfcResult.errors.length > 0 && (
           <div className="mt-3 p-2 bg-muted/50 rounded text-xs font-mono space-y-0.5">
             {asfcResult.errors.map((e, i) => (
+              <div key={i} className="text-red-700">{e}</div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* REQ — Registre des entreprises du Québec */}
+      <section className="bg-card border border-border rounded-lg p-6 mb-6">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+            <Database className="w-5 h-5 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-base font-semibold">REQ — Registre des entreprises du Québec</h2>
+            <p className="text-sm text-muted-foreground">
+              Jeu de données ouvert (~850 000 entreprises actives). Téléchargez le ZIP depuis{" "}
+              <a href="https://www.donneesquebec.ca/recherche/dataset/registre-des-entreprises" target="_blank" rel="noreferrer" className="underline">Données Québec</a>
+              {" "}(225 Mo) et importez-le ici. Aucun email fourni — les leads seront marqués <code className="mx-1 bg-muted px-1 rounded text-xs">needs_enrichment</code>.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-md bg-blue-50 border border-blue-200 p-3 mb-4 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-blue-900">
+            <strong>Données publiques sans email.</strong> L'import crée des prospects sans adresse courriel.
+            Utilisez l'enrichissement pour trouver les emails via le site web ou les annuaires publics.
+            Seules les entreprises <strong>IMMAT</strong> (actives) sont importées.
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1.5">Fichier ZIP (Registre des entreprises)</label>
+            <input
+              type="file"
+              accept=".zip"
+              onChange={(e) => setReqFile(e.target.files?.[0] ?? null)}
+              className="text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-border file:text-sm file:bg-muted file:cursor-pointer cursor-pointer w-full"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1.5">Limite d'import (0 = toutes)</label>
+            <input
+              type="number"
+              min={0}
+              step={1000}
+              value={reqMaxLeads}
+              onChange={(e) => setReqMaxLeads(Number(e.target.value))}
+              className="w-full h-9 px-3 text-sm border border-border rounded-md bg-background"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <Button onClick={handleReqImport} disabled={reqImporting || !reqFile} variant="outline">
+            {reqImporting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Import en cours…
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4 mr-2" />
+                Importer le REQ
+              </>
+            )}
+          </Button>
+          {reqResult && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="w-4 h-4 text-green-600" />
+              <span>
+                <strong className="text-foreground">{reqResult.imported}</strong> importées
+                {reqResult.total != null && ` sur ${reqResult.total} traitées`}
+                {reqResult.skipped > 0 && `, ${reqResult.skipped} ignorées`}
+              </span>
+            </div>
+          )}
+        </div>
+        {reqResult && reqResult.errors.length > 0 && (
+          <div className="mt-3 p-2 bg-muted/50 rounded text-xs font-mono space-y-0.5">
+            {reqResult.errors.slice(0, 10).map((e, i) => (
               <div key={i} className="text-red-700">{e}</div>
             ))}
           </div>

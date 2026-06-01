@@ -1,1 +1,7 @@
 - [ASFC data source](asfc-source.md) — government page with a single URL gives ~416 customs brokers, 381 with real emails; parse via cheerio HTML table.
+- [Orval codegen config](orval-codegen-config.md) — zod target must use single mode with explicit output path; api-zod index.ts exports only from ./generated/api (no api.schemas).
+- [SMTP encryption](smtp-encryption.md) — AES-256-GCM, key = SHA-256(SESSION_SECRET); encryptSmtpPass/decryptSmtpPass in sender.ts; never store plaintext.
+- [Sequence follow-up model](sequence-followup-model.md) — sequenceSteps on campaign (JSONB array); sequenceStepIndex/parentEmailId on emails; draft+future scheduledAt = pending; 60s ticker in queue.ts processes due follow-ups; cancelPendingFollowUps() cancels on reply/unsubscribe.
+- [REQ import](req-import.md) — ZIP upload → Entreprise.csv extraction; IMMAT filter only; email=NULL, emailStatus='needs_enrichment'; flexible column names (NOM_PERS_MORALE, NEQ, SITE_INTERNET, ETAT_IMMAT).
+- [Settings route pattern](settings-route-pattern.md) — PATCH /api/settings/sender uses manual field-by-field patching (not generated UpdateSenderSettingsBody) to handle smtpPass encryption and Date conversions.
+- [Activity type enum](activity-type-enum.md) — email_replied is already in the pgEnum in lib/db/src/schema/activities.ts; no migration needed for that value.

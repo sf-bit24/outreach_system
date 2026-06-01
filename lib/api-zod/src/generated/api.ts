@@ -311,6 +311,17 @@ export const ListCampaignsResponseItem = zod.object({
   emailTemplate: zod.string().nullish(),
   sendingDelayMinutes: zod.number(),
   dailyLimit: zod.number(),
+  sequenceSteps: zod
+    .array(
+      zod.object({
+        delayDays: zod
+          .number()
+          .describe("Days after previous step before sending this one"),
+        subject: zod.string(),
+        body: zod.string(),
+      }),
+    )
+    .nullish(),
   totalLeads: zod.number(),
   contacted: zod.number(),
   replied: zod.number(),
@@ -329,6 +340,17 @@ export const CreateCampaignBody = zod.object({
   emailTemplate: zod.string().optional(),
   sendingDelayMinutes: zod.number().optional(),
   dailyLimit: zod.number().optional(),
+  sequenceSteps: zod
+    .array(
+      zod.object({
+        delayDays: zod
+          .number()
+          .describe("Days after previous step before sending this one"),
+        subject: zod.string(),
+        body: zod.string(),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -347,6 +369,17 @@ export const GetCampaignResponse = zod.object({
   emailTemplate: zod.string().nullish(),
   sendingDelayMinutes: zod.number(),
   dailyLimit: zod.number(),
+  sequenceSteps: zod
+    .array(
+      zod.object({
+        delayDays: zod
+          .number()
+          .describe("Days after previous step before sending this one"),
+        subject: zod.string(),
+        body: zod.string(),
+      }),
+    )
+    .nullish(),
   totalLeads: zod.number(),
   contacted: zod.number(),
   replied: zod.number(),
@@ -369,6 +402,17 @@ export const UpdateCampaignBody = zod.object({
   emailTemplate: zod.string().optional(),
   sendingDelayMinutes: zod.number().optional(),
   dailyLimit: zod.number().optional(),
+  sequenceSteps: zod
+    .array(
+      zod.object({
+        delayDays: zod
+          .number()
+          .describe("Days after previous step before sending this one"),
+        subject: zod.string(),
+        body: zod.string(),
+      }),
+    )
+    .optional(),
 });
 
 export const UpdateCampaignResponse = zod.object({
@@ -380,6 +424,17 @@ export const UpdateCampaignResponse = zod.object({
   emailTemplate: zod.string().nullish(),
   sendingDelayMinutes: zod.number(),
   dailyLimit: zod.number(),
+  sequenceSteps: zod
+    .array(
+      zod.object({
+        delayDays: zod
+          .number()
+          .describe("Days after previous step before sending this one"),
+        subject: zod.string(),
+        body: zod.string(),
+      }),
+    )
+    .nullish(),
   totalLeads: zod.number(),
   contacted: zod.number(),
   replied: zod.number(),
@@ -410,6 +465,17 @@ export const StartCampaignResponse = zod.object({
   emailTemplate: zod.string().nullish(),
   sendingDelayMinutes: zod.number(),
   dailyLimit: zod.number(),
+  sequenceSteps: zod
+    .array(
+      zod.object({
+        delayDays: zod
+          .number()
+          .describe("Days after previous step before sending this one"),
+        subject: zod.string(),
+        body: zod.string(),
+      }),
+    )
+    .nullish(),
   totalLeads: zod.number(),
   contacted: zod.number(),
   replied: zod.number(),
@@ -433,6 +499,17 @@ export const PauseCampaignResponse = zod.object({
   emailTemplate: zod.string().nullish(),
   sendingDelayMinutes: zod.number(),
   dailyLimit: zod.number(),
+  sequenceSteps: zod
+    .array(
+      zod.object({
+        delayDays: zod
+          .number()
+          .describe("Days after previous step before sending this one"),
+        subject: zod.string(),
+        body: zod.string(),
+      }),
+    )
+    .nullish(),
   totalLeads: zod.number(),
   contacted: zod.number(),
   replied: zod.number(),
@@ -475,6 +552,16 @@ export const ListEmailsResponseItem = zod.object({
   repliedAt: zod.string().nullish(),
   deliveredAt: zod.string().nullish(),
   bouncedAt: zod.string().nullish(),
+  sequenceStepIndex: zod
+    .number()
+    .nullish()
+    .describe(
+      "0 = initial send, 1+ = follow-up step index. null if not part of a sequence.",
+    ),
+  parentEmailId: zod
+    .number()
+    .nullish()
+    .describe("ID of the initial email in the sequence chain"),
   createdAt: zod.string(),
 });
 export const ListEmailsResponse = zod.array(ListEmailsResponseItem);
@@ -521,6 +608,16 @@ export const GetEmailResponse = zod.object({
   repliedAt: zod.string().nullish(),
   deliveredAt: zod.string().nullish(),
   bouncedAt: zod.string().nullish(),
+  sequenceStepIndex: zod
+    .number()
+    .nullish()
+    .describe(
+      "0 = initial send, 1+ = follow-up step index. null if not part of a sequence.",
+    ),
+  parentEmailId: zod
+    .number()
+    .nullish()
+    .describe("ID of the initial email in the sequence chain"),
   createdAt: zod.string(),
 });
 
@@ -563,6 +660,16 @@ export const UpdateEmailResponse = zod.object({
   repliedAt: zod.string().nullish(),
   deliveredAt: zod.string().nullish(),
   bouncedAt: zod.string().nullish(),
+  sequenceStepIndex: zod
+    .number()
+    .nullish()
+    .describe(
+      "0 = initial send, 1+ = follow-up step index. null if not part of a sequence.",
+    ),
+  parentEmailId: zod
+    .number()
+    .nullish()
+    .describe("ID of the initial email in the sequence chain"),
   createdAt: zod.string(),
 });
 
@@ -599,6 +706,16 @@ export const SendEmailResponse = zod.object({
   repliedAt: zod.string().nullish(),
   deliveredAt: zod.string().nullish(),
   bouncedAt: zod.string().nullish(),
+  sequenceStepIndex: zod
+    .number()
+    .nullish()
+    .describe(
+      "0 = initial send, 1+ = follow-up step index. null if not part of a sequence.",
+    ),
+  parentEmailId: zod
+    .number()
+    .nullish()
+    .describe("ID of the initial email in the sequence chain"),
   createdAt: zod.string(),
 });
 
@@ -643,6 +760,17 @@ export const GetSenderSettingsResponse = zod.object({
   delayMaxSeconds: zod.number(),
   resendEnabled: zod.boolean(),
   resendConfigured: zod.boolean(),
+  transportMode: zod.enum(["simulation", "resend", "smtp"]),
+  smtpHost: zod.string().nullish(),
+  smtpPort: zod.number().nullish(),
+  smtpUser: zod.string().nullish(),
+  smtpConfigured: zod.boolean(),
+  warmupEnabled: zod.boolean(),
+  warmupStartDate: zod.string().nullish(),
+  warmupStartVolume: zod.number(),
+  warmupIncrement: zod.number(),
+  warmupMaxVolume: zod.number(),
+  warmupEffectiveLimit: zod.number(),
   updatedAt: zod.string(),
 });
 
@@ -660,6 +788,21 @@ export const UpdateSenderSettingsBody = zod.object({
   delayMinSeconds: zod.number().optional(),
   delayMaxSeconds: zod.number().optional(),
   resendEnabled: zod.boolean().optional(),
+  transportMode: zod.string().optional(),
+  smtpHost: zod.string().optional(),
+  smtpPort: zod.number().optional(),
+  smtpUser: zod.string().optional(),
+  smtpPass: zod
+    .string()
+    .optional()
+    .describe(
+      "Mot de passe SMTP en clair — chiffré AES-256-GCM avant stockage. Omettre pour conserver l'existant.",
+    ),
+  warmupEnabled: zod.boolean().optional(),
+  warmupStartDate: zod.string().optional(),
+  warmupStartVolume: zod.number().optional(),
+  warmupIncrement: zod.number().optional(),
+  warmupMaxVolume: zod.number().optional(),
 });
 
 export const UpdateSenderSettingsResponse = zod.object({
@@ -675,7 +818,34 @@ export const UpdateSenderSettingsResponse = zod.object({
   delayMaxSeconds: zod.number(),
   resendEnabled: zod.boolean(),
   resendConfigured: zod.boolean(),
+  transportMode: zod.enum(["simulation", "resend", "smtp"]),
+  smtpHost: zod.string().nullish(),
+  smtpPort: zod.number().nullish(),
+  smtpUser: zod.string().nullish(),
+  smtpConfigured: zod.boolean(),
+  warmupEnabled: zod.boolean(),
+  warmupStartDate: zod.string().nullish(),
+  warmupStartVolume: zod.number(),
+  warmupIncrement: zod.number(),
+  warmupMaxVolume: zod.number(),
+  warmupEffectiveLimit: zod.number(),
   updatedAt: zod.string(),
+});
+
+/**
+ * @summary Send a test email via current transport configuration
+ */
+export const TestSenderSettingsBody = zod.object({
+  to: zod
+    .string()
+    .optional()
+    .describe("Override recipient (defaults to senderEmail)"),
+});
+
+export const TestSenderSettingsResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string(),
+  providerMessageId: zod.string().optional(),
 });
 
 /**

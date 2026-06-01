@@ -484,6 +484,39 @@ paths:
               schema:
                 $ref: "#/components/schemas/SenderSettings"
 
+  /settings/sender/test:
+    post:
+      operationId: testSenderSettings
+      tags: [settings]
+      summary: Send a test email via current transport configuration
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                to:
+                  type: string
+                  description: Override recipient (defaults to senderEmail)
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  providerMessageId:
+                    type: string
+                required:
+                  - success
+                  - message
+
   /dashboard/activity:
     get:
       operationId: getActivity
@@ -696,6 +729,21 @@ components:
         - skipped
         - errors
 
+    SequenceStep:
+      type: object
+      properties:
+        delayDays:
+          type: integer
+          description: Days after previous step before sending this one
+        subject:
+          type: string
+        body:
+          type: string
+      required:
+        - delayDays
+        - subject
+        - body
+
     Campaign:
       type: object
       properties:
@@ -716,6 +764,10 @@ components:
           type: integer
         dailyLimit:
           type: integer
+        sequenceSteps:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/SequenceStep"
         totalLeads:
           type: integer
         contacted:
@@ -753,6 +805,10 @@ components:
           type: integer
         dailyLimit:
           type: integer
+        sequenceSteps:
+          type: array
+          items:
+            $ref: "#/components/schemas/SequenceStep"
       required:
         - name
 
@@ -773,6 +829,10 @@ components:
           type: integer
         dailyLimit:
           type: integer
+        sequenceSteps:
+          type: array
+          items:
+            $ref: "#/components/schemas/SequenceStep"
 
     Email:
       type: object
@@ -808,6 +868,12 @@ components:
           type: ["string", "null"]
         bouncedAt:
           type: ["string", "null"]
+        sequenceStepIndex:
+          type: ["integer", "null"]
+          description: "0 = initial send, 1+ = follow-up step index. null if not part of a sequence."
+        parentEmailId:
+          type: ["integer", "null"]
+          description: ID of the initial email in the sequence chain
         createdAt:
           type: string
       required:
@@ -913,6 +979,29 @@ components:
           type: boolean
         resendConfigured:
           type: boolean
+        transportMode:
+          type: string
+          enum: [simulation, resend, smtp]
+        smtpHost:
+          type: ["string", "null"]
+        smtpPort:
+          type: ["integer", "null"]
+        smtpUser:
+          type: ["string", "null"]
+        smtpConfigured:
+          type: boolean
+        warmupEnabled:
+          type: boolean
+        warmupStartDate:
+          type: ["string", "null"]
+        warmupStartVolume:
+          type: integer
+        warmupIncrement:
+          type: integer
+        warmupMaxVolume:
+          type: integer
+        warmupEffectiveLimit:
+          type: integer
         updatedAt:
           type: string
       required:
@@ -928,6 +1017,13 @@ components:
         - delayMaxSeconds
         - resendEnabled
         - resendConfigured
+        - transportMode
+        - smtpConfigured
+        - warmupEnabled
+        - warmupStartVolume
+        - warmupIncrement
+        - warmupMaxVolume
+        - warmupEffectiveLimit
         - updatedAt
 
     UpdateSenderSettingsBody:
@@ -953,6 +1049,27 @@ components:
           type: integer
         resendEnabled:
           type: boolean
+        transportMode:
+          type: string
+        smtpHost:
+          type: string
+        smtpPort:
+          type: integer
+        smtpUser:
+          type: string
+        smtpPass:
+          type: string
+          description: Mot de passe SMTP en clair — chiffré AES-256-GCM avant stockage. Omettre pour conserver l'existant.
+        warmupEnabled:
+          type: boolean
+        warmupStartDate:
+          type: string
+        warmupStartVolume:
+          type: integer
+        warmupIncrement:
+          type: integer
+        warmupMaxVolume:
+          type: integer
 
     ActivityItem:
       type: object
