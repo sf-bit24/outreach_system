@@ -67,6 +67,9 @@ router.get("/sources", async (_req, res): Promise<void> => {
       status: credStatus(linkedinCreds),
       lastError: linkedinCreds?.lastError ?? null,
     },
+    // Google Maps scrapes public listings — no login required, so it's
+    // always "ready" as long as the worker can launch a browser.
+    gmapsScraper: { configured: true, status: "active", lastError: null },
   });
 });
 
@@ -214,30 +217,52 @@ router.delete("/sources/scraper/credentials/:provider", async (req, res): Promis
 router.post("/sources/scraper/jobs", async (req, res): Promise<void> => {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const provider = body["provider"];
-  if (provider !== "apollo" && provider !== "linkedin") {
-    res.status(400).json({ error: "provider must be 'apollo' or 'linkedin'" });
-    return;
-  }
-  const params = {
-    keywords: asString(body["keywords"]),
-    jobTitles: asStringArray(body["jobTitles"]),
-    locations: asStringArray(body["locations"]),
-    perPage: asInt(body["perPage"]),
-    maxPages: asInt(body["maxPages"]),
-    maxResults: asInt(body["maxResults"]),
-  };
-
-  // Verify credentials exist before queueing
-  const [creds] = await db
-    .select({ id: scrapingCredentialsTable.id })
-    .from(scrapingCredentialsTable)
-    .where(eq(scrapingCredentialsTable.provider, provider))
-    .limit(1);
-  if (!creds) {
+  if (provider !== "apollo" && provider !== "linkedin" && provider !== "gmaps") {
     res.status(400).json({
-      error: `No ${provider} session cookies configured. Import them first.`,
+      error: "provider must be 'apollo', 'linkedin' or 'gmaps'",
     });
     return;
+  }
+  const params =
+    provider === "gmaps"
+      ? {
+          category: asString(body["category"]),
+          city: asString(body["city"]),
+          radiusKm: asInt(body["radiusKm"]),
+          maxResults: asInt(body["maxResults"]),
+        }
+      : {
+          keywords: asString(body["keywords"]),
+          jobTitles: asStringArray(body["jobTitles"]),
+          locations: asStringArray(body["locations"]),
+          perPage: asInt(body["perPage"]),
+          maxPages: asInt(body["maxPages"]),
+          maxResults: asInt(body["maxResults"]),
+        };
+
+  if (provider === "gmaps") {
+    // Sanity-check: at least a category or city is required so we don't
+    // launch a browser to scrape "everything".
+    const p = params as { category?: string; city?: string };
+    if (!p.category && !p.city) {
+      res.status(400).json({
+        error: "Au moins une catégorie ou une ville est requise pour Google Maps",
+      });
+      return;
+    }
+  } else {
+    // Verify credentials exist before queueing for cookie-based providers
+    const [creds] = await db
+      .select({ id: scrapingCredentialsTable.id })
+      .from(scrapingCredentialsTable)
+      .where(eq(scrapingCredentialsTable.provider, provider))
+      .limit(1);
+    if (!creds) {
+      res.status(400).json({
+        error: `No ${provider} session cookies configured. Import them first.`,
+      });
+      return;
+    }
   }
 
   const [job] = await db
@@ -290,11 +315,12 @@ router.get("/sources/scraper/usage", async (_req, res): Promise<void> => {
     .from(scrapingJobsTable)
     .where(sql`${scrapingJobsTable.startedAt} >= ${oneHourAgo}`)
     .groupBy(scrapingJobsTable.provider);
-  const usage: Record<string, number> = { apollo: 0, linkedin: 0 };
+  const usage: Record<string, number> = { apollo: 0, linkedin: 0, gmaps: 0 };
   for (const r of rows) usage[r.provider] = Number(r.total);
   res.json({
     apollo: { used: usage.apollo, limit: 200 },
     linkedin: { used: usage.linkedin, limit: 100 },
+    gmaps: { used: usage.gmaps, limit: 150 },
     windowMinutes: 60,
   });
 });

@@ -11,6 +11,7 @@ import {
 export const scrapingProviderEnum = pgEnum("scraping_provider", [
   "apollo",
   "linkedin",
+  "gmaps",
 ]);
 
 export const scrapingJobStatusEnum = pgEnum("scraping_job_status", [

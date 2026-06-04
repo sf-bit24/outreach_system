@@ -17,17 +17,23 @@ import {
   type ScrapedLinkedInPerson,
   type LinkedInSearchParams,
 } from "./linkedinScraper";
+import {
+  scrapeGmaps,
+  type ScrapedGmapsPlace,
+  type GmapsSearchParams,
+} from "./gmapsScraper";
 import type { StoredCredentials } from "./browser";
 
-type Provider = "apollo" | "linkedin";
+type Provider = "apollo" | "linkedin" | "gmaps";
 
 const RATE_LIMITS: Record<Provider, { perHour: number }> = {
   apollo: { perHour: 200 },
   linkedin: { perHour: 100 },
+  gmaps: { perHour: 150 },
 };
 
 async function loadCredentials(
-  provider: Provider,
+  provider: "apollo" | "linkedin",
 ): Promise<StoredCredentials> {
   const [row] = await db
     .select()
@@ -225,7 +231,109 @@ async function importLinkedIn(
 }
 
 interface JobResult {
-  sample: ScrapedApolloPerson[] | ScrapedLinkedInPerson[];
+  sample:
+    | ScrapedApolloPerson[]
+    | ScrapedLinkedInPerson[]
+    | ScrapedGmapsPlace[];
+}
+
+/**
+ * Build a stable dedupe key for a Google Maps place. Google Place URLs are
+ * the most reliable identifier; fall back to (name + address) for the rare
+ * card without a usable href.
+ */
+function gmapsDedupeKey(p: { name: string; address: string | null; sourceUrl: string }): string {
+  if (p.sourceUrl) return `gmaps:${p.sourceUrl}`;
+  return `gmaps-name:${p.name.toLowerCase()}|${(p.address ?? "").toLowerCase()}`;
+}
+
+async function findExistingGmapsLead(p: {
+  website: string | null;
+  phone: string | null;
+  company: string;
+}): Promise<{ id: number } | null> {
+  if (p.website) {
+    const [row] = await db
+      .select({ id: leadsTable.id })
+      .from(leadsTable)
+      .where(eq(leadsTable.website, p.website))
+      .limit(1);
+    if (row) return row;
+  }
+  if (p.phone) {
+    const [row] = await db
+      .select({ id: leadsTable.id })
+      .from(leadsTable)
+      .where(eq(leadsTable.phone, p.phone))
+      .limit(1);
+    if (row) return row;
+  }
+  const [row] = await db
+    .select({ id: leadsTable.id })
+    .from(leadsTable)
+    .where(eq(leadsTable.company, p.company))
+    .limit(1);
+  return row ?? null;
+}
+
+async function importGmaps(
+  _job: ScrapingJob,
+  results: ScrapedGmapsPlace[],
+): Promise<{ imported: number; skipped: number }> {
+  let imported = 0;
+  let skipped = 0;
+  const seen = new Set<string>();
+  const now = new Date();
+  for (const r of results) {
+    const key = gmapsDedupeKey(r);
+    if (seen.has(key)) {
+      skipped++;
+      continue;
+    }
+    seen.add(key);
+    if (!r.name) {
+      skipped++;
+      continue;
+    }
+    const existing = await findExistingGmapsLead({
+      website: r.website,
+      phone: r.phone,
+      company: r.name,
+    });
+    if (existing) {
+      await db
+        .update(leadsTable)
+        .set({ scrapedAt: now })
+        .where(eq(leadsTable.id, existing.id));
+      skipped++;
+      continue;
+    }
+    try {
+      // Google Maps never exposes an email — store NULL and let the
+      // enrichment pipeline find one from the website. company stores the
+      // business name (Maps listings have no separate person).
+      await db.insert(leadsTable).values({
+        firstName: "—",
+        lastName: r.name,
+        email: null,
+        company: r.name,
+        jobTitle: r.category ?? "Établissement",
+        website: r.website,
+        phone: r.phone,
+        location: r.address,
+        industry: r.category,
+        source: "gmaps_scrape",
+        sourceUrl: r.sourceUrl,
+        emailStatus: "needs_enrichment",
+        emailLocked: false,
+        scrapedAt: now,
+      });
+      imported++;
+    } catch {
+      skipped++;
+    }
+  }
+  return { imported, skipped };
 }
 
 async function executeJob(jobId: number): Promise<void> {
@@ -245,7 +353,6 @@ async function executeJob(jobId: number): Promise<void> {
   try {
     const provider = job.provider as Provider;
     await checkRateLimit(provider);
-    const creds = await loadCredentials(provider);
     const params = (job.params ?? {}) as Record<string, unknown>;
 
     let scraped = 0;
@@ -254,6 +361,7 @@ async function executeJob(jobId: number): Promise<void> {
     let resultPayload: JobResult | null = null;
 
     if (provider === "apollo") {
+      const creds = await loadCredentials(provider);
       const results = await scrapeApollo(creds, params as ApolloSearchParams);
       scraped = results.length;
       const counts = await importApollo(job, results);
@@ -261,12 +369,21 @@ async function executeJob(jobId: number): Promise<void> {
       skipped = counts.skipped;
       resultPayload = { sample: results.slice(0, 3) };
     } else if (provider === "linkedin") {
+      const creds = await loadCredentials(provider);
       const results = await scrapeLinkedIn(
         creds,
         params as LinkedInSearchParams,
       );
       scraped = results.length;
       const counts = await importLinkedIn(job, results);
+      imported = counts.imported;
+      skipped = counts.skipped;
+      resultPayload = { sample: results.slice(0, 3) };
+    } else if (provider === "gmaps") {
+      // Google Maps requires no login — public business listings only.
+      const results = await scrapeGmaps(params as GmapsSearchParams);
+      scraped = results.length;
+      const counts = await importGmaps(job, results);
       imported = counts.imported;
       skipped = counts.skipped;
       resultPayload = { sample: results.slice(0, 3) };
@@ -288,8 +405,11 @@ async function executeJob(jobId: number): Promise<void> {
     // If the session is no longer valid (login wall, captcha, expired cookie),
     // flip the credential row to "expired" so the UI can prompt the user to
     // re-import cookies and so we don't keep retrying with dead credentials.
-    if (/session expired|invalid|login|checkpoint|captcha/i.test(msg)) {
-      const provider = job.provider as Provider;
+    const provider = job.provider as Provider;
+    if (
+      provider !== "gmaps" &&
+      /session expired|invalid|login|checkpoint|captcha/i.test(msg)
+    ) {
       await db
         .update(scrapingCredentialsTable)
         .set({

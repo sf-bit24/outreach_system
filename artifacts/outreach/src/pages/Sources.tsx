@@ -12,6 +12,7 @@ import {
   Loader2,
   RefreshCw,
   Globe,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ interface SourcesStatus {
   csv: { configured: boolean };
   apolloScraper: ScraperStatus;
   linkedinScraper: ScraperStatus;
+  gmapsScraper: ScraperStatus;
 }
 
 function CredentialBanner({ scraper }: { scraper: ScraperStatus | undefined }) {
@@ -57,7 +59,7 @@ interface ImportResult {
 
 interface ScraperJob {
   id: number;
-  provider: "apollo" | "linkedin";
+  provider: "apollo" | "linkedin" | "gmaps";
   status: "queued" | "running" | "completed" | "failed" | "cancelled";
   itemsScraped: number;
   itemsImported: number;
@@ -72,6 +74,7 @@ interface ScraperJob {
 interface UsageInfo {
   apollo: { used: number; limit: number };
   linkedin: { used: number; limit: number };
+  gmaps: { used: number; limit: number };
   windowMinutes: number;
 }
 
@@ -113,6 +116,12 @@ export default function Sources() {
   const [liScrapeTitles, setLiScrapeTitles] = useState("");
   const [liScrapeLocations, setLiScrapeLocations] = useState("");
   const [liScrapeMax, setLiScrapeMax] = useState(25);
+
+  // Google Maps scrape form
+  const [gmCategory, setGmCategory] = useState("");
+  const [gmCity, setGmCity] = useState("Montréal, QC");
+  const [gmRadius, setGmRadius] = useState(10);
+  const [gmMax, setGmMax] = useState(25);
 
   function refreshAll() {
     fetch(`${import.meta.env.BASE_URL}api/sources`)
@@ -328,6 +337,36 @@ export default function Sources() {
       return;
     }
     toast({ title: `Job LinkedIn #${data.id} en file d'attente` });
+    refreshAll();
+  }
+
+  async function startGmapsScrape() {
+    if (!gmCategory.trim() && !gmCity.trim()) {
+      toast({
+        title: "Catégorie ou ville requise",
+        description: "Précisez au moins une catégorie ou une ville.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const body = {
+      provider: "gmaps",
+      category: gmCategory || undefined,
+      city: gmCity || undefined,
+      radiusKm: gmRadius || undefined,
+      maxResults: gmMax,
+    };
+    const res = await fetch(`${import.meta.env.BASE_URL}api/sources/scraper/jobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast({ title: "Erreur", description: data?.error ?? "Échec", variant: "destructive" });
+      return;
+    }
+    toast({ title: `Job Google Maps #${data.id} en file d'attente` });
     refreshAll();
   }
 
@@ -728,6 +767,81 @@ export default function Sources() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* Google Maps Scraper */}
+      <section className="bg-card border border-border rounded-lg p-6 mb-6">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+            <MapPin className="w-5 h-5 text-emerald-600" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-base font-semibold">Google Maps (services locaux)</h2>
+            <p className="text-sm text-muted-foreground">
+              Source primaire pour les commerces de proximité (cabinets, restos, magasins).
+              Aucun login requis — listings publics uniquement.
+              {usage && (
+                <span className="ml-2 text-xs">
+                  Quota : {usage.gmaps.used}/{usage.gmaps.limit} / heure
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-md bg-emerald-50 border border-emerald-200 p-3 mb-4 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-emerald-700 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-emerald-900">
+            Récupère <strong>nom, adresse, téléphone et site web</strong>. L'email est ensuite
+            trouvé par le module d'enrichissement à partir du site. Tous les leads créés ici
+            sont marqués <code className="mx-1 bg-white/60 px-1 rounded">needs_enrichment</code>
+            tant qu'aucun email vérifié n'est disponible.
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+          <div>
+            <Label className="text-xs">Catégorie</Label>
+            <Input
+              value={gmCategory}
+              onChange={(e) => setGmCategory(e.target.value)}
+              placeholder="cabinet dentaire, restaurant, garage…"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Ville</Label>
+            <Input
+              value={gmCity}
+              onChange={(e) => setGmCity(e.target.value)}
+              placeholder="Montréal, QC"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Rayon (km)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={100}
+              value={gmRadius}
+              onChange={(e) => setGmRadius(Number(e.target.value) || 10)}
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Résultats max (1-80)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={80}
+              value={gmMax}
+              onChange={(e) => setGmMax(Number(e.target.value) || 25)}
+            />
+          </div>
+        </div>
+
+        <Button onClick={startGmapsScrape} variant="outline">
+          <Search className="w-4 h-4 mr-2" />
+          Lancer le scraping Google Maps
+        </Button>
       </section>
 
       {/* Jobs Feed */}
