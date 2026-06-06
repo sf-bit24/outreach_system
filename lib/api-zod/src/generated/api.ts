@@ -76,7 +76,7 @@ export const ListLeadsResponse = zod.array(ListLeadsResponseItem);
 export const CreateLeadBody = zod.object({
   firstName: zod.string(),
   lastName: zod.string(),
-  email: zod.string(),
+  email: zod.string().optional(),
   company: zod.string(),
   jobTitle: zod.string(),
   website: zod.string().optional(),
@@ -97,7 +97,7 @@ export const ImportLeadsBody = zod.object({
     zod.object({
       firstName: zod.string(),
       lastName: zod.string(),
-      email: zod.string(),
+      email: zod.string().optional(),
       company: zod.string(),
       jobTitle: zod.string(),
       website: zod.string().optional(),

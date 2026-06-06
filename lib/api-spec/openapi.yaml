@@ -665,7 +665,6 @@ components:
       required:
         - firstName
         - lastName
-        - email
         - company
         - jobTitle
 

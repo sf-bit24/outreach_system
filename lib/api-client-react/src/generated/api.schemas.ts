@@ -89,7 +89,7 @@ export interface Lead {
 export interface CreateLeadBody {
   firstName: string;
   lastName: string;
-  email: string;
+  email?: string;
   company: string;
   jobTitle: string;
   website?: string;
