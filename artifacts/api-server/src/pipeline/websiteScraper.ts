@@ -67,12 +67,34 @@ function extractKeywords(text: string, limit = 10): string[] {
     .map(([w]) => w);
 }
 
+const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"];
+
+/**
+ * Replace common anti-scraping obfuscations so "info [at] acme (dot) com"
+ * becomes "info@acme.com". Only the *bracketed* form is rewritten — requiring
+ * surrounding brackets/parens avoids matching the letters "at"/"dot" inside
+ * ordinary words (e.g. "static" must not become "st@ic"). Used on visible text
+ * only; the result must still match a real email pattern to survive.
+ */
+function deobfuscate(text: string): string {
+  return text
+    .replace(/\s*[\[({]\s*(?:at|arobase|chez)\s*[\])}]\s*/gi, "@")
+    .replace(/\s*[\[({]\s*(?:dot|point)\s*[\])}]\s*/gi, ".");
+}
+
 function extractEmails(text: string): string[] {
   const found = new Set<string>();
   const re = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  for (const m of text.matchAll(re)) {
-    const e = m[0].toLowerCase();
-    if (!e.endsWith(".png") && !e.endsWith(".jpg")) {
+  const sources = [text, deobfuscate(text)];
+  for (const src of sources) {
+    for (const m of src.matchAll(re)) {
+      const e = m[0].toLowerCase().replace(/\.$/, "");
+      if (IMAGE_EXTS.some((ext) => e.endsWith(ext))) continue;
+      // Skip addresses that are clearly asset/placeholder noise.
+      if (/^[0-9a-f]{16,}@/.test(e)) continue;
+      if (/(sentry|wixpress|example\.com|domain\.com|yourdomain)/.test(e)) {
+        continue;
+      }
       found.add(e);
     }
   }
@@ -153,6 +175,175 @@ export async function analyzeWebsite(
     emailVisibleOnSite,
     noOptOutMention,
     fetchedUrl: url,
+  };
+}
+
+export interface ContactEmailCandidate {
+  email: string;
+  /** Page where the address was found (provenance for LCAP audit). */
+  foundOn: string;
+}
+
+export interface ContactEmailResult {
+  /** Ranked candidate emails — best (most likely a real, domain-matching
+   *  mailbox) first. Every entry was published in plain view on the site. */
+  candidates: ContactEmailCandidate[];
+  /** Pages that were actually fetched while searching. */
+  pagesChecked: string[];
+}
+
+const CONTACT_PATHS = [
+  "/contact",
+  "/contact-us",
+  "/contactez-nous",
+  "/contactus",
+  "/nous-joindre",
+  "/joindre",
+  "/about",
+  "/about-us",
+  "/a-propos",
+  "/à-propos",
+  "/apropos",
+  "/mentions-legales",
+  "/mentions-légales",
+  "/legal",
+  "/legal-notice",
+  "/privacy",
+  "/politique-de-confidentialite",
+  "/team",
+  "/equipe",
+  "/notre-equipe",
+  "/support",
+];
+
+/** Role prefixes that are still valid LCAP-published contacts but are a less
+ *  precise match than a personal/domain mailbox, so they rank lower. */
+const GENERIC_PREFIXES = new Set([
+  "noreply",
+  "no-reply",
+  "donotreply",
+  "postmaster",
+  "mailer-daemon",
+  "abuse",
+]);
+
+function collectVisibleEmails(html: string): string[] {
+  const $ = cheerio.load(html);
+  $("script, style, noscript, svg").remove();
+  const bodyHtml = $("body").html() ?? html;
+  const textEmails = extractEmails(bodyHtml);
+  const mailtoEmails = $('a[href^="mailto:"]')
+    .map((_, el) =>
+      $(el).attr("href")?.replace(/^mailto:/i, "").split("?")[0]?.toLowerCase(),
+    )
+    .get()
+    .filter(Boolean) as string[];
+  return [...new Set([...mailtoEmails, ...textEmails])];
+}
+
+function rankCandidates(
+  candidates: ContactEmailCandidate[],
+  siteDomain: string | null,
+): ContactEmailCandidate[] {
+  const score = (email: string): number => {
+    const [local, domain] = email.split("@");
+    let s = 0;
+    // Prefer addresses on the company's own domain (or a subdomain of it).
+    if (
+      siteDomain &&
+      (domain === siteDomain || domain.endsWith(`.${siteDomain}`))
+    ) {
+      s += 100;
+    }
+    // Demote noreply/postmaster-style mailboxes — never useful for outreach.
+    if (GENERIC_PREFIXES.has(local)) s -= 100;
+    // Slightly prefer human-looking local parts (contain a dot or are short).
+    if (/^[a-z]+\.[a-z]+$/.test(local)) s += 10;
+    // Generic role inboxes (info@, contact@) are fine but rank below personal.
+    if (/^(info|contact|hello|bonjour|sales|ventes)$/.test(local)) s += 5;
+    return s;
+  };
+  return candidates
+    .slice()
+    .sort((a, b) => score(b.email) - score(a.email));
+}
+
+/**
+ * Crawl a company website's homepage plus its contact / legal / about pages to
+ * harvest email addresses that are "published in plain view" (LCAP-compliant).
+ * Returns ranked candidates with provenance. Never invents an address — if the
+ * site exposes none, the candidate list is empty.
+ */
+export async function findContactEmails(
+  rawUrl: string | null | undefined,
+): Promise<ContactEmailResult> {
+  const url = normalizeUrl(rawUrl ?? "");
+  if (!url) return { candidates: [], pagesChecked: [] };
+
+  let base: URL;
+  try {
+    base = new URL(url);
+  } catch {
+    return { candidates: [], pagesChecked: [] };
+  }
+  const siteDomain = base.hostname.replace(/^www\./, "").toLowerCase();
+
+  const byEmail = new Map<string, ContactEmailCandidate>();
+  const pagesChecked: string[] = [];
+
+  const visitAndCollect = async (target: string): Promise<void> => {
+    const res = await fetchWithTimeout(target);
+    if (!res || !res.ok) return;
+    const ctype = res.headers.get("content-type") ?? "";
+    if (!/html|text/i.test(ctype)) return;
+    const html = await res.text();
+    pagesChecked.push(target);
+    for (const email of collectVisibleEmails(html)) {
+      if (!byEmail.has(email)) {
+        byEmail.set(email, { email, foundOn: target });
+      }
+    }
+  };
+
+  // 1. Homepage first (footer often holds the contact address).
+  await visitAndCollect(url);
+
+  // 2. Discover linked contact/legal pages from the homepage anchors.
+  const linkedPaths = new Set<string>();
+  const homeRes = await fetchWithTimeout(url);
+  if (homeRes && homeRes.ok) {
+    const html = await homeRes.text();
+    const $ = cheerio.load(html);
+    $("a[href]").each((_, el) => {
+      const href = $(el).attr("href") ?? "";
+      if (/contact|joindre|mentions|legal|propos|about|confidential|privacy|equipe|team/i.test(href)) {
+        try {
+          const resolved = new URL(href, base);
+          if (resolved.hostname.replace(/^www\./, "") === siteDomain) {
+            linkedPaths.add(resolved.toString());
+          }
+        } catch {
+          /* ignore malformed hrefs */
+        }
+      }
+    });
+  }
+
+  // 3. Visit discovered links plus the conventional path guesses.
+  const targets = new Set<string>([
+    ...linkedPaths,
+    ...CONTACT_PATHS.map((p) => new URL(p, base).toString()),
+  ]);
+
+  for (const target of targets) {
+    // Stop early once we have a few strong candidates to limit requests.
+    if (byEmail.size >= 8) break;
+    await visitAndCollect(target);
+  }
+
+  return {
+    candidates: rankCandidates([...byEmail.values()], siteDomain),
+    pagesChecked,
   };
 }
 

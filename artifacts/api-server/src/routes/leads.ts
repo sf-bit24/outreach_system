@@ -16,10 +16,8 @@ import {
   ImportLeadsBody,
   ImportLeadsResponse,
 } from "@workspace/api-zod";
-import { validateEmail } from "../pipeline/emailValidator";
-import { analyzeWebsite, detectHiringSignal } from "../pipeline/websiteScraper";
-import { assessLcap, generateUnsubscribeToken } from "../pipeline/lcap";
-import { logger } from "../lib/logger";
+import { enrichLead } from "../pipeline/enrich";
+import { generateUnsubscribeToken } from "../pipeline/lcap";
 
 const router: IRouter = Router();
 
@@ -194,11 +192,13 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
 });
 
 /**
- * Stage 2 — Real enrichment pipeline:
- * 1. Scrape company website (cheerio) → extract summary + keywords + visible emails
+ * Stage 2 — Real enrichment pipeline (delegated to pipeline/enrich.ts):
+ * 1. Scrape company website (cheerio) → summary + keywords + LCAP visibility
  * 2. Detect hiring signal from /careers, /jobs etc.
- * 3. Validate email syntax + DNS MX record
- * 4. Assess LCAP compliance based on web visibility + opt-out mentions + role
+ * 3. Source a real email: crawl contact/legal pages for a published address and
+ *    confirm it via SMTP (RCPT TO) before adopting it — never inventing one.
+ * 4. Assess LCAP compliance, then promote to "verified" only on a deliverable
+ *    SMTP result so the lead becomes eligible for sending.
  */
 router.post("/leads/:id/enrich", async (req, res): Promise<void> => {
   const params = EnrichLeadParams.safeParse(req.params);
@@ -207,105 +207,13 @@ router.post("/leads/:id/enrich", async (req, res): Promise<void> => {
     return;
   }
 
-  const [existing] = await db
-    .select()
-    .from(leadsTable)
-    .where(eq(leadsTable.id, params.data.id));
-
-  if (!existing) {
+  const result = await enrichLead(params.data.id);
+  if (!result) {
     res.status(404).json({ error: "Lead not found" });
     return;
   }
 
-  logger.info({ leadId: existing.id }, "Starting enrichment pipeline");
-
-  // Run each step independently — partial enrichment is better than nothing
-  const [websiteRes, hiringRes, emailRes] = await Promise.allSettled([
-    analyzeWebsite(existing.website, existing.email ?? ""),
-    detectHiringSignal(existing.website),
-    existing.email ? validateEmail(existing.email) : Promise.resolve(null),
-  ]);
-
-  const website =
-    websiteRes.status === "fulfilled"
-      ? websiteRes.value
-      : {
-          reachable: false,
-          summary: "",
-          keywords: [],
-          emailsFound: [],
-          emailVisibleOnSite: false,
-          noOptOutMention: true,
-          fetchedUrl: null,
-        };
-  const hiring =
-    hiringRes.status === "fulfilled"
-      ? hiringRes.value
-      : { isHiring: false, intentSignal: null };
-  const emailCheck =
-    emailRes.status === "fulfilled" && emailRes.value
-      ? emailRes.value
-      : { valid: false, reason: existing.email ? "Validation failed (transient error)" : "Aucun email à valider", hasMxRecord: false };
-
-  if (websiteRes.status === "rejected") {
-    logger.warn({ err: websiteRes.reason, leadId: existing.id }, "Website analysis failed");
-  }
-  if (hiringRes.status === "rejected") {
-    logger.warn({ err: hiringRes.reason, leadId: existing.id }, "Hiring detection failed");
-  }
-  if (emailRes.status === "rejected") {
-    logger.warn({ err: emailRes.reason, leadId: existing.id }, "Email validation failed");
-  }
-
-  const lcap = assessLcap({
-    emailVisibleOnSite: website.emailVisibleOnSite,
-    noOptOutMention: website.noOptOutMention,
-    hasJobTitle: Boolean(existing.jobTitle && existing.jobTitle.trim()),
-    emailValid: emailCheck.valid,
-  });
-
-  const intentSignal =
-    hiring.intentSignal ??
-    (website.keywords.length > 0
-      ? `Mots-clés du site: ${website.keywords.slice(0, 5).join(", ")}`
-      : null);
-
-  const [lead] = await db
-    .update(leadsTable)
-    .set({
-      emailValid: emailCheck.valid,
-      emailValidationReason: emailCheck.reason,
-      // Promote scraped/locked status to "verified" once the email passes
-      // validation — this is what unlocks the lead for the sender pipeline.
-      // Leads with no email at all stay marked "needs_enrichment".
-      emailStatus: existing.email
-        ? emailCheck.valid
-          ? "verified"
-          : "invalid"
-        : "needs_enrichment",
-      // If validation succeeds the address is no longer locked.
-      emailLocked: existing.email && emailCheck.valid ? false : existing.emailLocked,
-      isHiring: hiring.isHiring,
-      intentSignal,
-      websiteSummary: website.summary || null,
-      websiteKeywords: website.keywords.length > 0 ? website.keywords.join(", ") : null,
-      lcapCompliant: lcap.compliant,
-      lcapReason: lcap.reason,
-      stage: "enriched",
-      unsubscribeToken: existing.unsubscribeToken ?? generateUnsubscribeToken(),
-      updatedAt: new Date(),
-    })
-    .where(eq(leadsTable.id, params.data.id))
-    .returning();
-
-  await db.insert(activitiesTable).values({
-    type: "lead_enriched",
-    description: `Enriched ${lead.firstName} ${lead.lastName} — ${lcap.compliant ? "LCAP OK" : "LCAP non conforme"}${hiring.isHiring ? " · hiring signal" : ""}`,
-    leadName: `${lead.firstName} ${lead.lastName}`,
-    leadId: lead.id,
-  });
-
-  res.json(lead);
+  res.json(result.lead);
 });
 
 export default router;

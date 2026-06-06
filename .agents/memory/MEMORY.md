@@ -5,3 +5,4 @@
 - [REQ import](req-import.md) — ZIP upload → Entreprise.csv extraction; IMMAT filter only; email=NULL, emailStatus='needs_enrichment'; flexible column names (NOM_PERS_MORALE, NEQ, SITE_INTERNET, ETAT_IMMAT).
 - [Settings route pattern](settings-route-pattern.md) — PATCH /api/settings/sender uses manual field-by-field patching (not generated UpdateSenderSettingsBody) to handle smtpPass encryption and Date conversions.
 - [Activity type enum](activity-type-enum.md) — email_replied is already in the pgEnum in lib/db/src/schema/activities.ts; no migration needed for that value.
+- [Email enrichment & SMTP verify](email-enrichment-verification.md) — crawl site contact pages for a published email, RCPT-TO verify; only `deliverable` → verified; catch-all/timeout never trusted; port 25 open in dev.

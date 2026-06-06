@@ -23,6 +23,7 @@ import {
   type GmapsSearchParams,
 } from "./gmapsScraper";
 import type { StoredCredentials } from "./browser";
+import { enrichLead } from "../pipeline/enrich";
 
 type Provider = "apollo" | "linkedin" | "gmaps";
 
@@ -181,9 +182,10 @@ async function importApollo(
 async function importLinkedIn(
   _job: ScrapingJob,
   results: ScrapedLinkedInPerson[],
-): Promise<{ imported: number; skipped: number }> {
+): Promise<{ imported: number; skipped: number; insertedIds: number[] }> {
   let imported = 0;
   let skipped = 0;
+  const insertedIds: number[] = [];
   const seen = new Set<string>();
   const now = new Date();
   for (const r of results) {
@@ -208,26 +210,49 @@ async function importLinkedIn(
     }
     try {
       // LinkedIn search results never expose emails. Store NULL — never invent.
-      await db.insert(leadsTable).values({
-        firstName: r.firstName || "Unknown",
-        lastName: r.lastName || "",
-        email: null,
-        company: r.company ?? "Unknown",
-        jobTitle: r.jobTitle ?? "Unknown",
-        linkedinUrl: r.linkedinUrl,
-        location: r.location,
-        source: "linkedin_scrape",
-        sourceUrl: r.sourceUrl,
-        emailStatus: "needs_enrichment",
-        emailLocked: false,
-        scrapedAt: now,
-      });
+      const [inserted] = await db
+        .insert(leadsTable)
+        .values({
+          firstName: r.firstName || "Unknown",
+          lastName: r.lastName || "",
+          email: null,
+          company: r.company ?? "Unknown",
+          jobTitle: r.jobTitle ?? "Unknown",
+          linkedinUrl: r.linkedinUrl,
+          location: r.location,
+          source: "linkedin_scrape",
+          sourceUrl: r.sourceUrl,
+          emailStatus: "needs_enrichment",
+          emailLocked: false,
+          scrapedAt: now,
+        })
+        .returning({ id: leadsTable.id });
+      if (inserted) insertedIds.push(inserted.id);
       imported++;
     } catch {
       skipped++;
     }
   }
-  return { imported, skipped };
+  return { imported, skipped, insertedIds };
+}
+
+/**
+ * Best-effort background enrichment for freshly-imported LinkedIn leads. Runs
+ * leads one at a time (each enrichment fans out to website + SMTP probes) so we
+ * don't overwhelm outbound connections. Failures are logged and never bubble up
+ * to the scraping job — a lead that can't be enriched simply stays blocked.
+ */
+function enrichLeadsInBackground(leadIds: number[]): void {
+  if (leadIds.length === 0) return;
+  void (async () => {
+    for (const id of leadIds) {
+      try {
+        await enrichLead(id);
+      } catch (err) {
+        console.error(`[scraping] Auto-enrichment failed for lead ${id}:`, err);
+      }
+    }
+  })();
 }
 
 interface JobResult {
@@ -379,6 +404,9 @@ async function executeJob(jobId: number): Promise<void> {
       imported = counts.imported;
       skipped = counts.skipped;
       resultPayload = { sample: results.slice(0, 3) };
+      // LinkedIn leads land without an email — kick off enrichment so the
+      // website-crawl + SMTP-verify pipeline can source a real address.
+      enrichLeadsInBackground(counts.insertedIds);
     } else if (provider === "gmaps") {
       // Google Maps requires no login — public business listings only.
       const results = await scrapeGmaps(params as GmapsSearchParams);
