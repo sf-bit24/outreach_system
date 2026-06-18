@@ -11,6 +11,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { TrendingUp, Users, Mail, MailOpen, CornerDownRight, Megaphone } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import SetupChecklist from "@/components/SetupChecklist";
 
 const stageColors: Record<string, string> = {
   raw: "#94a3b8",
@@ -95,6 +96,8 @@ export default function Dashboard() {
         <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Your outreach pipeline at a glance</p>
       </div>
+
+      <SetupChecklist totalLeads={stats?.totalLeads ?? 0} emailsSent={stats?.emailsSent ?? 0} />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">

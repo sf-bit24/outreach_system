@@ -1,4 +1,10 @@
-# OutreachIQ
+# OutreachIQ (prospectionelite.com)
+
+## Production
+- **URL de production** : https://outreach-system-demo144.replit.app
+- **Domaine custom** : pointer `app.prospectionelite.com` → CNAME vers `outreach-system-demo144.replit.app`
+- **Type de déploiement** : autoscale (Replit)
+- **Transport email** : SMTP Hostinger (`smtp.hostinger.com:587`) — configuré via Paramètres dans l'app
 
 ## Overview
 OutreachIQ is an intelligent B2B outreach automation system implementing the
