@@ -169,6 +169,45 @@ paths:
         "204":
           description: Deleted
 
+  /leads/{id}/auto-pipeline:
+    post:
+      operationId: runAutoPipeline
+      tags: [leads]
+      summary: Manually trigger the auto-pipeline for an already-enriched lead (generate AI email + enqueue)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Email generated and enqueued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  emailId:
+                    type: integer
+                  message:
+                    type: string
+                required:
+                  - emailId
+                  - message
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Lead not eligible or pipeline not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /leads/{id}/enrich:
     post:
       operationId: enrichLead

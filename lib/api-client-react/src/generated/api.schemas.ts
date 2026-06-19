@@ -407,6 +407,11 @@ export type ListLeadsParams = {
   emailStatus?: string;
 };
 
+export type RunAutoPipeline200 = {
+  emailId: number;
+  message: string;
+};
+
 export type ListEmailsParams = {
   /**
    * @nullable

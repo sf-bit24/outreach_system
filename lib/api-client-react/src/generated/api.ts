@@ -33,6 +33,7 @@ import type {
   ListEmailsParams,
   ListLeadsParams,
   PipelineStage,
+  RunAutoPipeline200,
   SenderSettings,
   TestSenderSettings200,
   TestSenderSettingsBody,
@@ -638,6 +639,90 @@ export const useDeleteLead = <
   TContext
 > => {
   return useMutation(getDeleteLeadMutationOptions(options));
+};
+
+/**
+ * @summary Manually trigger the auto-pipeline for an already-enriched lead (generate AI email + enqueue)
+ */
+export const getRunAutoPipelineUrl = (id: number) => {
+  return `/api/leads/${id}/auto-pipeline`;
+};
+
+export const runAutoPipeline = async (
+  id: number,
+  options?: RequestInit,
+): Promise<RunAutoPipeline200> => {
+  return customFetch<RunAutoPipeline200>(getRunAutoPipelineUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRunAutoPipelineMutationOptions = <
+  TError = ErrorType<Error>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAutoPipeline>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runAutoPipeline>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["runAutoPipeline"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runAutoPipeline>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return runAutoPipeline(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunAutoPipelineMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runAutoPipeline>>
+>;
+
+export type RunAutoPipelineMutationError = ErrorType<Error>;
+
+/**
+ * @summary Manually trigger the auto-pipeline for an already-enriched lead (generate AI email + enqueue)
+ */
+export const useRunAutoPipeline = <
+  TError = ErrorType<Error>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAutoPipeline>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runAutoPipeline>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getRunAutoPipelineMutationOptions(options));
 };
 
 /**

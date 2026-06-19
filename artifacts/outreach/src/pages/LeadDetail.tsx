@@ -6,13 +6,14 @@ import {
   useListEmails,
   useGenerateEmail,
   useSendEmail,
+  useRunAutoPipeline,
   getGetLeadQueryKey,
   getListEmailsQueryKey,
   getListLeadsQueryKey,
   getGetDashboardStatsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, RefreshCw, Mail, Send, CheckCircle, XCircle, AlertCircle, Search } from "lucide-react";
+import { ArrowLeft, RefreshCw, Mail, Send, CheckCircle, XCircle, AlertCircle, Search, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import StageBadge from "@/components/StageBadge";
@@ -59,6 +60,7 @@ export default function LeadDetail() {
   const enrichLead = useEnrichLead();
   const generateEmail = useGenerateEmail();
   const sendEmail = useSendEmail();
+  const runAutoPipeline = useRunAutoPipeline();
 
   function handleEnrich() {
     enrichLead.mutate(
@@ -71,6 +73,25 @@ export default function LeadDetail() {
         },
         onError: () => {
           toast({ title: "Enrichment failed", variant: "destructive" });
+        },
+      }
+    );
+  }
+
+  function handleRunAutoPipeline() {
+    runAutoPipeline.mutate(
+      { id: leadId },
+      {
+        onSuccess: (data) => {
+          queryClient.invalidateQueries({ queryKey: getListEmailsQueryKey({ leadId }) });
+          queryClient.invalidateQueries({ queryKey: getGetLeadQueryKey(leadId) });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardStatsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+          toast({ title: data.message ?? "Email généré et mis en queue" });
+        },
+        onError: (err: any) => {
+          const msg = err?.response?.data?.error ?? "Échec du pipeline automatique";
+          toast({ title: msg, variant: "destructive" });
         },
       }
     );
@@ -129,6 +150,13 @@ export default function LeadDetail() {
     );
   }
 
+  const hasActiveEmail = !emailsLoading && emails?.some(e => e.status !== "failed");
+  const canAutoPipeline =
+    lead.emailStatus === "verified" &&
+    lead.lcapCompliant === true &&
+    !hasActiveEmail &&
+    !emailsLoading;
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-5">
       <div className="flex items-center gap-3">
@@ -163,6 +191,18 @@ export default function LeadDetail() {
             <RefreshCw className={`w-3.5 h-3.5 ${enrichLead.isPending ? "animate-spin" : ""}`} />
             {enrichLead.isPending ? "Enriching..." : "Enrich"}
           </Button>
+          {canAutoPipeline && (
+            <Button
+              size="sm"
+              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={handleRunAutoPipeline}
+              disabled={runAutoPipeline.isPending}
+              title="Génère un email personnalisé et le met en queue automatiquement"
+            >
+              <Zap className={`w-3.5 h-3.5 ${runAutoPipeline.isPending ? "animate-pulse" : ""}`} />
+              {runAutoPipeline.isPending ? "Pipeline en cours..." : "Lancer pipeline auto"}
+            </Button>
+          )}
           <Button
             size="sm"
             className="gap-1.5"

@@ -1,5 +1,6 @@
 import { db, leadsTable, activitiesTable } from "@workspace/db";
 import type { Lead } from "@workspace/db";
+import { triggerAutoPipeline } from "./autoPipelineTrigger";
 import { eq } from "drizzle-orm";
 import { validateEmail, verifyEmailSmtp } from "./emailValidator";
 import {
@@ -394,6 +395,14 @@ export async function enrichLead(leadId: number): Promise<EnrichResult | null> {
     leadName: `${lead.firstName} ${lead.lastName}`,
     leadId: lead.id,
   });
+
+  // Non-blocking auto-pipeline trigger: if the lead just became verified + LCAP compliant,
+  // immediately generate and enqueue an email without waiting (fire-and-forget).
+  if (emailVerified && lcap.compliant) {
+    void triggerAutoPipeline(lead).catch((err) =>
+      logger.error({ err, leadId: lead.id }, "Auto-pipeline trigger failed after enrichment"),
+    );
+  }
 
   return { lead, emailVerified, emailNote };
 }

@@ -17,6 +17,7 @@ import {
   ImportLeadsResponse,
 } from "@workspace/api-zod";
 import { enrichLead } from "../pipeline/enrich";
+import { triggerAutoPipeline } from "../pipeline/autoPipelineTrigger";
 import { generateUnsubscribeToken } from "../pipeline/lcap";
 
 const router: IRouter = Router();
@@ -215,6 +216,47 @@ router.post("/leads/:id/enrich", async (req, res): Promise<void> => {
   }
 
   res.json(result.lead);
+});
+
+/**
+ * Manually trigger the auto-pipeline for an already-enriched lead.
+ * Useful for leads imported before auto-pipeline was activated.
+ * Guard: emailStatus must be 'verified' + lcapCompliant=true.
+ */
+router.post("/leads/:id/auto-pipeline", async (req, res): Promise<void> => {
+  const params = GetLeadParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(eq(leadsTable.id, params.data.id));
+
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  if (lead.emailStatus !== "verified" || !lead.lcapCompliant) {
+    res.status(422).json({
+      error: "Le lead doit être vérifié (emailStatus=verified) et LCAP conforme pour lancer le pipeline automatique.",
+    });
+    return;
+  }
+
+  const result = await triggerAutoPipeline(lead);
+
+  if (!result) {
+    res.status(422).json({
+      error: "Pipeline automatique désactivé, aucune campagne configurée, ou un email est déjà en cours pour ce lead.",
+    });
+    return;
+  }
+
+  res.json(result);
 });
 
 export default router;

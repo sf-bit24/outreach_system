@@ -21,6 +21,7 @@ import { getOrCreateSenderSettings } from "./queue";
 import { enrichLead } from "./enrich";
 import { runJobInBackground } from "../scraping/jobRunner";
 import { logger } from "../lib/logger";
+export { triggerAutoPipeline } from "./autoPipelineTrigger";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

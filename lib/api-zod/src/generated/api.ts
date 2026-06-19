@@ -270,6 +270,18 @@ export const DeleteLeadParams = zod.object({
 });
 
 /**
+ * @summary Manually trigger the auto-pipeline for an already-enriched lead (generate AI email + enqueue)
+ */
+export const RunAutoPipelineParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RunAutoPipelineResponse = zod.object({
+  emailId: zod.number(),
+  message: zod.string(),
+});
+
+/**
  * @summary Trigger enrichment for a lead
  */
 export const EnrichLeadParams = zod.object({
