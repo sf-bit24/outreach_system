@@ -334,13 +334,17 @@ async function importGmaps(
       continue;
     }
     try {
-      // Google Maps never exposes an email — store NULL and let the
-      // enrichment pipeline find one from the website. company stores the
-      // business name (Maps listings have no separate person).
+      // When gosom finds an email on the business website (via the -email
+      // flag), store it as "scraped" — visible on the site, so LCAP "bien
+      // en vue" applies. The enrichment pipeline still validates it via
+      // SMTP RCPT TO before marking it "verified" and allowing sends.
+      // When no email was found, store NULL so the enrichment pipeline can
+      // still discover one via website crawl + cascade.
+      const hasEmail = Boolean(r.email);
       await db.insert(leadsTable).values({
         firstName: "—",
         lastName: r.name,
-        email: null,
+        email: hasEmail ? r.email!.toLowerCase() : null,
         company: r.name,
         jobTitle: r.category ?? "Établissement",
         website: r.website,
@@ -349,7 +353,7 @@ async function importGmaps(
         industry: r.category,
         source: "gmaps_scrape",
         sourceUrl: r.sourceUrl,
-        emailStatus: "needs_enrichment",
+        emailStatus: hasEmail ? "scraped" : "needs_enrichment",
         emailLocked: false,
         scrapedAt: now,
       });

@@ -1,8 +1,9 @@
-/// <reference lib="dom" />
-import { chromium } from "playwright";
+import { spawn } from "node:child_process";
+import { writeFile, readFile, unlink, chmod } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { jitterDelay, DRY_RUN } from "./browser";
+import { logger } from "../lib/logger";
+import { DRY_RUN } from "./browser";
 
 export interface GmapsSearchParams {
   category?: string;
@@ -20,13 +21,25 @@ export interface ScrapedGmapsPlace {
   rating: number | null;
   reviewsCount: number | null;
   sourceUrl: string;
+  email: string | null;
 }
 
-const DEFAULT_MAX_RESULTS = 25;
-const HARD_CAP = 80;
+export const GMAPS_BINARY = "/tmp/gmaps-scraper";
+const BINARY_VERSION = "1.12.1";
+const BINARY_URL = `https://github.com/gosom/google-maps-scraper/releases/download/v${BINARY_VERSION}/google_maps_scraper-${BINARY_VERSION}-linux-amd64`;
+const VERSION_FILE = `${GMAPS_BINARY}.version`;
 
-const DEFAULT_UA =
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
+const DEFAULT_MAX_RESULTS = 25;
+const HARD_CAP = 100;
+
+// Playwright-go 1.57.0 (used by gosom 1.12.1) downloads Chrome headless shell
+// revision 1200 into PLAYWRIGHT_BROWSERS_PATH.  On NixOS/Replit the downloaded
+// binary fails to load libglib-2.0.so.0. We replace it with a thin sh wrapper
+// that delegates to the system Nix Chromium (which already has its LD paths
+// baked in via the Nix wrapper script).
+const PLAYWRIGHT_BROWSERS_PATH = "/tmp/pw-browsers";
+const CHROME_REVISION = "1200";
+const CHROME_WRAPPER_PATH = `${PLAYWRIGHT_BROWSERS_PATH}/chromium_headless_shell-${CHROME_REVISION}/chrome-headless-shell-linux64/chrome-headless-shell`;
 
 function resolveChromiumPath(): string | undefined {
   const env =
@@ -36,7 +49,7 @@ function resolveChromiumPath(): string | undefined {
   try {
     const found = execSync(
       "command -v chromium || command -v chromium-browser || command -v google-chrome",
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 3000 },
     ).trim();
     if (found && existsSync(found)) return found;
   } catch {
@@ -49,229 +62,333 @@ function resolveChromiumPath(): string | undefined {
   ]) {
     if (existsSync(p)) return p;
   }
+  // NixOS: the Chromium nix-store wrapper sets LD paths internally, so even
+  // though the downloaded headless shell fails, the nix binary works fine.
+  try {
+    const found = execSync(
+      "ls /nix/store/*/bin/chromium 2>/dev/null | head -1",
+      { encoding: "utf8", shell: "/bin/sh", timeout: 5000 },
+    ).trim();
+    if (found && existsSync(found)) return found;
+  } catch {
+    /* ignore */
+  }
   return undefined;
 }
 
-function buildSearchQuery(params: GmapsSearchParams): string {
+/**
+ * On NixOS the playwright-go chrome-headless-shell download fails to load
+ * libglib-2.0.so.0 (NixOS libraries live under /nix/store, not /lib).
+ * This function replaces the broken ELF binary at CHROME_WRAPPER_PATH with a
+ * POSIX sh wrapper that exec's the system Nix Chromium, which already has its
+ * library search paths baked into the Nix wrapper script.
+ *
+ * Called both:
+ *  a) after ensureGmapsBinary() so subsequent runs are pre-fixed, and
+ *  b) inside scrapeGmaps() on a shared-library error before retrying.
+ *
+ * Returns true if the wrapper was successfully created.
+ */
+async function setupChromiumWrapper(): Promise<boolean> {
+  if (!existsSync(CHROME_WRAPPER_PATH)) {
+    // Chrome hasn't been downloaded yet — nothing to fix.
+    return false;
+  }
+
+  const chromiumPath = resolveChromiumPath();
+  if (!chromiumPath) {
+    logger.warn("No system Chromium found — cannot create NixOS wrapper");
+    return false;
+  }
+
+  // If the file is already a shell script we wrote, nothing to do.
+  try {
+    const content = await readFile(CHROME_WRAPPER_PATH, "utf8");
+    if (content.startsWith("#!/")) {
+      logger.info(
+        { wrapperPath: CHROME_WRAPPER_PATH },
+        "Nix Chromium wrapper already in place",
+      );
+      return true;
+    }
+  } catch {
+    // binary file, not readable as text — proceed to overwrite
+  }
+
+  const wrapperScript = `#!/bin/sh\nexec "${chromiumPath}" "$@"\n`;
+  await writeFile(CHROME_WRAPPER_PATH, wrapperScript);
+  await chmod(CHROME_WRAPPER_PATH, 0o755);
+  logger.info(
+    { chromiumPath, wrapperPath: CHROME_WRAPPER_PATH },
+    "Replaced chrome-headless-shell with Nix Chromium wrapper",
+  );
+  return true;
+}
+
+/**
+ * Download the gosom Google Maps scraper binary if not already present.
+ * Also pre-installs the Nix Chromium wrapper if Chrome was already downloaded
+ * by a previous run (so the next job doesn't need a retry).
+ * Fire-and-forget safe — logs errors but never throws.
+ */
+export async function ensureGmapsBinary(): Promise<boolean> {
+  if (DRY_RUN) return true;
+
+  if (existsSync(GMAPS_BINARY) && existsSync(VERSION_FILE)) {
+    const stored = await readFile(VERSION_FILE, "utf8").catch(() => "");
+    if (stored.trim() === BINARY_VERSION) {
+      logger.info({ version: BINARY_VERSION }, "gosom binary already present");
+      // Best-effort: fix Chrome wrapper if leftover from a previous failed run
+      await setupChromiumWrapper().catch(() => undefined);
+      return true;
+    }
+  }
+
+  logger.info({ url: BINARY_URL }, "Downloading gosom Google Maps scraper binary…");
+  try {
+    const res = await fetch(BINARY_URL, { redirect: "follow" });
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    await writeFile(GMAPS_BINARY, buf);
+    await chmod(GMAPS_BINARY, 0o755);
+    await writeFile(VERSION_FILE, BINARY_VERSION);
+    logger.info({ version: BINARY_VERSION, bytes: buf.length }, "gosom binary downloaded successfully");
+    // Best-effort: fix Chrome wrapper if leftover from a previous failed run
+    await setupChromiumWrapper().catch(() => undefined);
+    return true;
+  } catch (err) {
+    logger.error({ err }, "Failed to download gosom binary — gmaps scraping will use DRY_RUN mode");
+    return false;
+  }
+}
+
+/** gosom Entry JSON structure (relevant fields only) */
+interface GosomEntry {
+  title?: string;
+  address?: string;
+  phone?: string;
+  web_site?: string;
+  category?: string;
+  review_rating?: number;
+  review_count?: number;
+  link?: string;
+  emails?: string[];
+  latitude?: number;
+  longitude?: number;
+}
+
+function buildQuery(params: GmapsSearchParams): string {
   const parts: string[] = [];
   if (params.category) parts.push(params.category.trim());
   if (params.city) parts.push(params.city.trim());
-  // Append the radius as a textual hint so Google Maps biases results to a
-  // tighter geographic area. Google parses "within Xkm" / "Xkm" tokens in
-  // the search box, which constrains the viewport accordingly.
-  if (params.radiusKm && params.radiusKm > 0) {
-    parts.push(`${params.radiusKm} km`);
-  }
-  return parts.join(" ").trim() || "restaurants";
+  return parts.join(" ").trim() || "commerces";
 }
 
-/**
- * Map a radius in km to a Google Maps zoom level. Smaller radius = closer
- * zoom. Used as a `?z=` hint when the URL allows it.
- */
-function radiusToZoom(radiusKm: number): number {
-  const z = Math.round(14 - Math.log2(Math.max(1, radiusKm)));
-  return Math.min(17, Math.max(8, z));
-}
-
-function buildSearchUrl(params: GmapsSearchParams): string {
-  const q = encodeURIComponent(buildSearchQuery(params));
-  const zoom = params.radiusKm && params.radiusKm > 0
-    ? `&z=${radiusToZoom(params.radiusKm)}`
-    : "";
-  return `https://www.google.com/maps/search/${q}/?hl=fr&gl=ca${zoom}`;
-}
-
-function dryRunResults(params: GmapsSearchParams): ScrapedGmapsPlace[] {
+function dryRunResults(params: GmapsSearchParams, max: number): ScrapedGmapsPlace[] {
   const seed = (params.category || "exemple").slice(0, 20);
   const city = params.city || "Montréal";
-  const max = Math.min(params.maxResults ?? 5, 5);
-  return Array.from({ length: max }).map((_, i) => ({
+  return Array.from({ length: Math.min(max, 5) }).map((_, i) => ({
     name: `${seed} Démo ${i + 1}`,
     address: `${100 + i} rue Démo, ${city}, QC`,
     phone: `+1 514-555-01${(i + 10).toString().padStart(2, "0")}`,
-    website: `https://exemple-${i + 1}-${seed.toLowerCase().replace(/\s+/g, "-")}.ca`,
+    website: `https://exemple-${i + 1}.ca`,
     category: params.category ?? null,
     rating: 4 + (i % 5) / 10,
     reviewsCount: 10 + i * 3,
-    sourceUrl: buildSearchUrl(params),
+    sourceUrl: `https://www.google.com/maps/search/${encodeURIComponent(buildQuery(params))}`,
+    email: i === 0 ? `info@exemple-1.ca` : null,
   }));
 }
 
+function isSharedLibraryError(msg: string): boolean {
+  return (
+    msg.includes("shared libraries") ||
+    msg.includes("libglib") ||
+    msg.includes("cannot open shared object") ||
+    msg.includes("No such file or directory") && msg.includes(".so")
+  );
+}
+
+function buildGosomArgs(queryFile: string, outFile: string, depth: number): string[] {
+  return [
+    "-input", queryFile,
+    "-results", outFile,
+    "-json",
+    "-depth", String(depth),
+    "-email",
+    "-exit-on-inactivity", "4m",
+    "-c", "1",
+    "-lang", "fr",
+  ];
+}
+
+function spawnGosom(
+  args: string[],
+  env: NodeJS.ProcessEnv,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const proc = spawn(GMAPS_BINARY, args, {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    const stderrLines: string[] = [];
+
+    proc.stdout.on("data", (_chunk: Buffer) => { /* gosom writes JSON to the results file */ });
+    proc.stderr.on("data", (chunk: Buffer) => {
+      const line = chunk.toString().trim();
+      if (line) stderrLines.push(line);
+    });
+
+    proc.on("close", (code) => {
+      if (code === 0 || code === null) {
+        resolve();
+      } else {
+        const errTail = stderrLines.slice(-10).join(" | ");
+        reject(new Error(`gosom exited with code ${code}: ${errTail}`));
+      }
+    });
+
+    proc.on("error", (err) => {
+      reject(new Error(`Failed to start gosom binary: ${err.message}`));
+    });
+
+    // Hard timeout: 8 minutes max (well past -exit-on-inactivity 4m)
+    const timeout = setTimeout(() => {
+      proc.kill("SIGTERM");
+      reject(new Error("gosom scrape timed out after 8 minutes"));
+    }, 8 * 60 * 1000);
+
+    proc.on("close", () => clearTimeout(timeout));
+  });
+}
+
 /**
- * Scrape Google Maps search results (public listings; no login required).
- * Extracts business name, address, phone, website. Email is NEVER returned —
- * downstream enrichment finds the email from the website. Conservative
- * delays + per-process serialization keep us off Google's throttling radar.
+ * Scrape Google Maps using the gosom Go binary.
+ * Falls back to DRY_RUN demo data when:
+ *  - SCRAPING_DRY_RUN=1 is set, or
+ *  - the binary isn't available.
+ *
+ * On NixOS the first run may fail because the playwright-downloaded Chrome
+ * headless shell lacks glibc dependencies.  The function detects this, installs
+ * a sh wrapper pointing to the Nix Chromium, and retries once automatically.
  */
 export async function scrapeGmaps(
   params: GmapsSearchParams,
 ): Promise<ScrapedGmapsPlace[]> {
-  if (DRY_RUN) return dryRunResults(params);
-
   const maxResults = Math.max(
     1,
     Math.min(params.maxResults ?? DEFAULT_MAX_RESULTS, HARD_CAP),
   );
-  const chromiumPath = resolveChromiumPath();
-  const browser = await chromium.launch({
-    ...(chromiumPath ? { executablePath: chromiumPath } : {}),
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-blink-features=AutomationControlled",
-    ],
-  });
-  const context = await browser.newContext({
-    userAgent: DEFAULT_UA,
-    viewport: { width: 1366, height: 900 },
-    locale: "fr-CA",
-    timezoneId: "America/Montreal",
-  });
 
-  const results: ScrapedGmapsPlace[] = [];
+  if (DRY_RUN) return dryRunResults(params, maxResults);
 
-  try {
-    const page = await context.newPage();
-    const searchUrl = buildSearchUrl(params);
-    await page.goto(searchUrl, {
-      waitUntil: "domcontentloaded",
-      timeout: 45000,
-    });
-    await jitterDelay(4000, 8000);
-
-    // Accept consent if Google shows the EU-style consent wall.
-    const consentBtn = page
-      .locator(
-        'button:has-text("Tout accepter"), button:has-text("Accept all"), button[aria-label*="Accept"]',
-      )
-      .first();
-    if (await consentBtn.isVisible().catch(() => false)) {
-      await consentBtn.click().catch(() => undefined);
-      await jitterDelay(2000, 4000);
+  if (!existsSync(GMAPS_BINARY)) {
+    logger.warn("gosom binary not found — attempting download now");
+    const ok = await ensureGmapsBinary();
+    if (!ok) {
+      logger.warn("Binary unavailable — returning dry-run results");
+      return dryRunResults(params, maxResults);
     }
-
-    // Wait for the results feed to appear.
-    const feedSel = 'div[role="feed"]';
-    await page.waitForSelector(feedSel, { timeout: 30000 }).catch(() => null);
-
-    // Scroll the feed until we have enough cards or hit the end-of-list marker.
-    let lastCount = 0;
-    let stableLoops = 0;
-    for (let i = 0; i < 25; i++) {
-      const count = await page.$$eval('a.hfpxzc', (els) => els.length).catch(() => 0);
-      if (count >= maxResults * 1.4) break;
-      if (count === lastCount) {
-        stableLoops++;
-        if (stableLoops >= 3) break;
-      } else {
-        stableLoops = 0;
-      }
-      lastCount = count;
-      await page
-        .$eval(feedSel, (el) => {
-          (el as HTMLElement).scrollBy(0, 1200);
-        })
-        .catch(() => undefined);
-      await jitterDelay(1500, 3000);
-    }
-
-    const cardLinks = await page.$$('a.hfpxzc');
-    const seenUrls = new Set<string>();
-
-    for (const link of cardLinks) {
-      if (results.length >= maxResults) break;
-
-      const placeUrl = await link.getAttribute("href").catch(() => null);
-      if (!placeUrl || seenUrls.has(placeUrl)) continue;
-      seenUrls.add(placeUrl);
-
-      // Click the card to open the detail panel; extract from the side panel.
-      try {
-        await link.click({ delay: 50 }).catch(() => undefined);
-      } catch {
-        continue;
-      }
-
-      // Wait for the detail panel to load (heading + buttons).
-      await page
-        .waitForSelector('h1.DUwDvf, h1[class*="DUwDvf"]', { timeout: 12000 })
-        .catch(() => null);
-      await jitterDelay(1500, 3000);
-
-      const data = await page
-        .evaluate(() => {
-          const text = (sel: string) =>
-            (document.querySelector(sel) as HTMLElement | null)?.innerText?.trim() || null;
-
-          const name = text('h1.DUwDvf') || text('h1[class*="DUwDvf"]');
-
-          // Buttons in the detail panel are identified by their data-item-id
-          // attribute: "address", "phone:tel:...", "authority" (= website).
-          const grab = (selector: string): string | null => {
-            const el = document.querySelector(selector) as HTMLElement | null;
-            if (!el) return null;
-            return (
-              el.getAttribute("aria-label")?.replace(/^[^:]+:\s*/, "")?.trim() ||
-              el.innerText?.trim() ||
-              null
-            );
-          };
-          const address = grab('button[data-item-id="address"]');
-          const phoneRaw = grab('button[data-item-id^="phone:tel:"]');
-          const phone = phoneRaw?.replace(/^Téléphone:\s*/i, "")?.trim() ?? null;
-
-          const websiteEl = document.querySelector(
-            'a[data-item-id="authority"]',
-          ) as HTMLAnchorElement | null;
-          const website = websiteEl?.href || null;
-
-          // Category sits right under the name.
-          const category =
-            (document.querySelector('button[jsaction*="category"]') as HTMLElement | null)
-              ?.innerText?.trim() || null;
-
-          // Rating + reviews are exposed in the header area.
-          const ratingText = (
-            document.querySelector('div.F7nice span[aria-hidden="true"]') as HTMLElement | null
-          )?.innerText?.trim();
-          const reviewsText = (
-            document.querySelector('div.F7nice span[aria-label*="avis"], div.F7nice span[aria-label*="reviews"]') as HTMLElement | null
-          )?.getAttribute("aria-label");
-
-          const rating = ratingText ? parseFloat(ratingText.replace(",", ".")) : null;
-          const reviewsCount = reviewsText
-            ? parseInt(reviewsText.replace(/[^\d]/g, ""), 10) || null
-            : null;
-
-          return { name, address, phone, website, category, rating, reviewsCount };
-        })
-        .catch(() => null);
-
-      if (!data || !data.name) continue;
-
-      results.push({
-        name: data.name,
-        address: data.address,
-        phone: data.phone,
-        website: data.website,
-        category: data.category,
-        rating: typeof data.rating === "number" && Number.isFinite(data.rating)
-          ? data.rating
-          : null,
-        reviewsCount: data.reviewsCount ?? null,
-        sourceUrl: page.url(),
-      });
-
-      // Random per-detail delay to mimic a human browsing.
-      await jitterDelay(2500, 5000);
-    }
-  } finally {
-    await context.close().catch(() => undefined);
-    await browser.close().catch(() => undefined);
   }
 
-  return results;
+  const jobId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const queryFile = `/tmp/gmaps-query-${jobId}.txt`;
+  const outFile = `/tmp/gmaps-out-${jobId}.json`;
+
+  const query = buildQuery(params);
+  await writeFile(queryFile, `${query}\n`);
+
+  const depth = Math.max(1, Math.min(Math.ceil(maxResults / 12), 8));
+  const chromiumPath = resolveChromiumPath();
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PLAYWRIGHT_BROWSERS_PATH,
+  };
+
+  logger.info(
+    { query, maxResults, depth, chromiumPath: chromiumPath ?? "none" },
+    "Starting gosom scrape",
+  );
+
+  const args = buildGosomArgs(queryFile, outFile, depth);
+
+  try {
+    try {
+      await spawnGosom(args, env);
+    } catch (firstErr) {
+      const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      if (!isSharedLibraryError(msg)) throw firstErr;
+
+      // NixOS: downloaded Chrome headless shell lacks system libs.
+      // Install the Nix Chromium wrapper and retry once.
+      logger.info(
+        { error: msg.slice(0, 120) },
+        "Shared-library error on first attempt — installing Nix Chromium wrapper and retrying",
+      );
+      const wrapped = await setupChromiumWrapper();
+      if (!wrapped) throw firstErr; // no Nix Chromium — give up
+
+      // Retry with fresh files (output file may be empty/absent from first run)
+      await spawnGosom(args, env);
+    }
+  } finally {
+    await unlink(queryFile).catch(() => undefined);
+  }
+
+  // Parse JSON output — gosom -json writes NDJSON (one object per line),
+  // NOT a JSON array.  Fall back to array parsing for forward-compatibility.
+  let entries: GosomEntry[] = [];
+  try {
+    const raw = await readFile(outFile, "utf8");
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      // empty file — no results
+    } else if (trimmed.startsWith("[")) {
+      // JSON array format (future-proof)
+      const parsed = JSON.parse(trimmed) as unknown;
+      entries = Array.isArray(parsed) ? (parsed as GosomEntry[]) : [];
+    } else {
+      // NDJSON format: one Entry object per line
+      entries = trimmed
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as GosomEntry);
+    }
+  } catch (err) {
+    logger.error({ err }, "Failed to parse gosom JSON output");
+  } finally {
+    await unlink(outFile).catch(() => undefined);
+  }
+
+  logger.info(
+    { count: entries.length, maxResults },
+    "gosom returned entries — mapping to leads",
+  );
+
+  return entries
+    .slice(0, maxResults)
+    .map((e): ScrapedGmapsPlace => ({
+      name: (e.title ?? "").trim() || "—",
+      address: e.address?.trim() || null,
+      phone: e.phone?.trim() || null,
+      website: e.web_site?.trim() || null,
+      category: e.category?.trim() || null,
+      rating:
+        typeof e.review_rating === "number" && Number.isFinite(e.review_rating)
+          ? e.review_rating
+          : null,
+      reviewsCount:
+        typeof e.review_count === "number" && e.review_count > 0
+          ? e.review_count
+          : null,
+      sourceUrl: e.link?.trim() || "",
+      // Use the first email found on the business website (via -email flag).
+      email: Array.isArray(e.emails) && e.emails.length > 0
+        ? (e.emails[0]?.trim() || null)
+        : null,
+    }))
+    .filter((p) => p.name && p.name !== "—");
 }

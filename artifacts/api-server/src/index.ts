@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { initScheduler } from "./pipeline/queue";
+import { ensureGmapsBinary } from "./scraping/gmapsScraper";
 
 const rawPort = process.env["PORT"];
 
@@ -24,4 +25,7 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
   initScheduler();
+  // Pre-download the gosom binary in the background so the first
+  // Google Maps scrape job doesn't stall on a cold download.
+  void ensureGmapsBinary();
 });

@@ -6,3 +6,4 @@
 - [Settings route pattern](settings-route-pattern.md) — PATCH /api/settings/sender uses manual field-by-field patching (not generated UpdateSenderSettingsBody) to handle smtpPass encryption and Date conversions.
 - [Activity type enum](activity-type-enum.md) — email_replied is already in the pgEnum in lib/db/src/schema/activities.ts; no migration needed for that value.
 - [Email enrichment & SMTP verify](email-enrichment-verification.md) — crawl site contact pages for a published email, RCPT-TO verify; only `deliverable` → verified; catch-all/timeout never trusted; port 25 open in dev.
+- [gosom NixOS fix](gosom-nixos-fix.md) — gosom downloads chrome-headless-shell which fails on NixOS; replace with sh wrapper → Nix Chromium; output is NDJSON not JSON array.
