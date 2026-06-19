@@ -157,7 +157,7 @@ export async function ensureGmapsBinary(): Promise<boolean> {
     await setupChromiumWrapper().catch(() => undefined);
     return true;
   } catch (err) {
-    logger.error({ err }, "Failed to download gosom binary — gmaps scraping will use DRY_RUN mode");
+    logger.error({ err }, "Failed to download gosom binary");
     return false;
   }
 }
@@ -178,10 +178,12 @@ interface GosomEntry {
 }
 
 function buildQuery(params: GmapsSearchParams): string {
-  const parts: string[] = [];
-  if (params.category) parts.push(params.category.trim());
-  if (params.city) parts.push(params.city.trim());
-  return parts.join(" ").trim() || "commerces";
+  const category = params.category?.trim();
+  const city = params.city?.trim();
+  if (category && city) return `${category} in ${city}`;
+  if (category) return category;
+  if (city) return city;
+  return "commerces";
 }
 
 function dryRunResults(params: GmapsSearchParams, max: number): ScrapedGmapsPlace[] {
@@ -216,7 +218,7 @@ function buildGosomArgs(queryFile: string, outFile: string, depth: number): stri
     "-json",
     "-depth", String(depth),
     "-email",
-    "-exit-on-inactivity", "4m",
+    "-exit-on-inactivity", "2m",
     "-c", "1",
     "-lang", "fr",
   ];
@@ -253,7 +255,7 @@ function spawnGosom(
       reject(new Error(`Failed to start gosom binary: ${err.message}`));
     });
 
-    // Hard timeout: 8 minutes max (well past -exit-on-inactivity 4m)
+    // Hard timeout: 5 minutes max (well past -exit-on-inactivity 2m)
     const timeout = setTimeout(() => {
       proc.kill("SIGTERM");
       reject(new Error("gosom scrape timed out after 8 minutes"));
@@ -265,9 +267,10 @@ function spawnGosom(
 
 /**
  * Scrape Google Maps using the gosom Go binary.
- * Falls back to DRY_RUN demo data when:
- *  - SCRAPING_DRY_RUN=1 is set, or
- *  - the binary isn't available.
+ *
+ * Falls back to DRY_RUN demo data ONLY when SCRAPING_DRY_RUN=1 is explicitly
+ * set.  When the binary is unavailable this throws so the job is marked failed
+ * and no synthetic data is imported into the leads table.
  *
  * On NixOS the first run may fail because the playwright-downloaded Chrome
  * headless shell lacks glibc dependencies.  The function detects this, installs
@@ -287,8 +290,9 @@ export async function scrapeGmaps(
     logger.warn("gosom binary not found — attempting download now");
     const ok = await ensureGmapsBinary();
     if (!ok) {
-      logger.warn("Binary unavailable — returning dry-run results");
-      return dryRunResults(params, maxResults);
+      throw new Error(
+        "gosom binary unavailable — check network connectivity and retry",
+      );
     }
   }
 
