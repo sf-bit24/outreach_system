@@ -24,6 +24,7 @@ import { logger } from "../lib/logger";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
+/** Generic last-run stamp (all 3 phases write here). */
 async function persistSummary(
   settings: SenderSettings,
   summary: string,
@@ -31,6 +32,17 @@ async function persistSummary(
   await db
     .update(senderSettingsTable)
     .set({ lastAutoRunAt: new Date(), lastAutoRunSummary: summary })
+    .where(eq(senderSettingsTable.id, settings.id));
+}
+
+/** Acquisition-specific stamp — never overwritten by enrichment or assign. */
+async function persistAcquisitionSummary(
+  settings: SenderSettings,
+  summary: string,
+): Promise<void> {
+  await db
+    .update(senderSettingsTable)
+    .set({ lastAutoAcquisitionAt: new Date(), lastAutoAcquisitionSummary: summary })
     .where(eq(senderSettingsTable.id, settings.id));
 }
 
@@ -61,8 +73,17 @@ export async function runNightlyAcquisition(): Promise<{
   if (categories.length === 0 || cities.length === 0) {
     const msg = "Aucune catégorie ou ville configurée";
     await persistSummary(settings, msg);
+    await persistAcquisitionSummary(settings, msg);
     return { jobsCreated: 0, summary: msg };
   }
+
+  // Count gmaps_scrape leads created in the last 24 h (result of previous run)
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(leadsTable)
+    .where(and(eq(leadsTable.source, "gmaps_scrape"), sql`${leadsTable.createdAt} >= ${dayAgo}`));
+  const leadsImported = countRow?.count ?? 0;
 
   const pairs = categories.length * cities.length;
   const maxPerJob = Math.max(1, Math.ceil(settings.autoAcquireMaxPerRun / pairs));
@@ -90,9 +111,12 @@ export async function runNightlyAcquisition(): Promise<{
     }
   }
 
-  const summary = `Acquisition : ${jobsCreated} jobs Google Maps créés (${categories.length} catégories × ${cities.length} villes, max ${maxPerJob}/job)`;
-  await persistSummary(settings, summary);
-  return { jobsCreated, summary };
+  const acquisitionSummary =
+    `${jobsCreated} jobs lancés · ${leadsImported} leads importés les 24h précédentes` +
+    ` (${categories.length} catég. × ${cities.length} villes, max ${maxPerJob}/job)`;
+  await persistSummary(settings, `Acquisition : ${acquisitionSummary}`);
+  await persistAcquisitionSummary(settings, acquisitionSummary);
+  return { jobsCreated, summary: acquisitionSummary };
 }
 
 // ── enrichment ────────────────────────────────────────────────────────────────

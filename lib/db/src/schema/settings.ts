@@ -50,6 +50,8 @@ export const senderSettingsTable = pgTable("sender_settings", {
   autoAssignCampaignId: integer("auto_assign_campaign_id"),
   lastAutoRunAt: timestamp("last_auto_run_at", { withTimezone: true }),
   lastAutoRunSummary: text("last_auto_run_summary"),
+  lastAutoAcquisitionAt: timestamp("last_auto_acquisition_at", { withTimezone: true }),
+  lastAutoAcquisitionSummary: text("last_auto_acquisition_summary"),
 
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()

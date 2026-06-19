@@ -28,6 +28,8 @@ function buildSettingsResponse(settings: Awaited<ReturnType<typeof getOrCreateSe
     autoAssignCampaignId: settings.autoAssignCampaignId ?? null,
     lastAutoRunAt: settings.lastAutoRunAt ? settings.lastAutoRunAt.toISOString() : null,
     lastAutoRunSummary: settings.lastAutoRunSummary ?? null,
+    lastAutoAcquisitionAt: settings.lastAutoAcquisitionAt ? settings.lastAutoAcquisitionAt.toISOString() : null,
+    lastAutoAcquisitionSummary: settings.lastAutoAcquisitionSummary ?? null,
   };
 }
 
@@ -212,6 +214,8 @@ router.get("/settings/pipeline-status", async (_req, res): Promise<void> => {
     autoPipelineEnabled: settings.autoPipelineEnabled,
     lastAutoRunAt: settings.lastAutoRunAt ? settings.lastAutoRunAt.toISOString() : null,
     lastAutoRunSummary: settings.lastAutoRunSummary ?? null,
+    lastAutoAcquisitionAt: settings.lastAutoAcquisitionAt ? settings.lastAutoAcquisitionAt.toISOString() : null,
+    lastAutoAcquisitionSummary: settings.lastAutoAcquisitionSummary ?? null,
     nextRunAt: nextRunAt(),
   });
 });

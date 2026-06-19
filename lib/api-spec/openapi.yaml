@@ -540,6 +540,10 @@ paths:
                     type: ["string", "null"]
                   lastAutoRunSummary:
                     type: ["string", "null"]
+                  lastAutoAcquisitionAt:
+                    type: ["string", "null"]
+                  lastAutoAcquisitionSummary:
+                    type: ["string", "null"]
                   nextRunAt:
                     type: string
                 required:
@@ -1060,6 +1064,10 @@ components:
         lastAutoRunAt:
           type: ["string", "null"]
         lastAutoRunSummary:
+          type: ["string", "null"]
+        lastAutoAcquisitionAt:
+          type: ["string", "null"]
+        lastAutoAcquisitionSummary:
           type: ["string", "null"]
         updatedAt:
           type: string

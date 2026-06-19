@@ -48,6 +48,8 @@ interface SenderSettings {
   autoAssignCampaignId: number | null;
   lastAutoRunAt: string | null;
   lastAutoRunSummary: string | null;
+  lastAutoAcquisitionAt: string | null;
+  lastAutoAcquisitionSummary: string | null;
   updatedAt: string;
 }
 
@@ -484,21 +486,21 @@ export default function Settings() {
               </Field>
             </div>
 
-            {settings?.lastAutoRunAt && (
+            {settings?.lastAutoAcquisitionAt && (
               <div className="rounded-md bg-muted p-3 space-y-1 text-xs">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
-                  <span className="font-medium">Dernière exécution :</span>
+                  <span className="font-medium">Dernière acquisition :</span>
                   <span className="text-muted-foreground">
-                    {new Date(settings.lastAutoRunAt).toLocaleString("fr-CA")}
+                    {new Date(settings.lastAutoAcquisitionAt).toLocaleString("fr-CA")}
                   </span>
                 </div>
-                {settings.lastAutoRunSummary && (
-                  <p className="text-muted-foreground pl-5">{settings.lastAutoRunSummary}</p>
+                {settings.lastAutoAcquisitionSummary && (
+                  <p className="text-muted-foreground pl-5">{settings.lastAutoAcquisitionSummary}</p>
                 )}
               </div>
             )}
-            {!settings?.lastAutoRunAt && (
+            {!settings?.lastAutoAcquisitionAt && (
               <div className="rounded-md bg-blue-50 border border-blue-200 p-3 text-xs text-blue-900">
                 Prochain démarrage : <strong>02h00 UTC</strong> — acquisition de{" "}
                 {form.autoAcquireCategories.split(",").filter(Boolean).length || "?"} catégorie(s) ×{" "}

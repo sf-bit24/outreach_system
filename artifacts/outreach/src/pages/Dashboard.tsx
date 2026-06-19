@@ -113,14 +113,14 @@ export default function Dashboard() {
           </div>
           <span className="text-muted-foreground">·</span>
           {pipelineStatus.autoPipelineEnabled ? (
-            pipelineStatus.lastAutoRunAt ? (
+            pipelineStatus.lastAutoAcquisitionAt ? (
               <span className="text-muted-foreground">
                 Dernière acquisition{" "}
                 <span className="text-foreground font-medium">
-                  {formatDistanceToNow(new Date(pipelineStatus.lastAutoRunAt), { addSuffix: true })}
+                  {formatDistanceToNow(new Date(pipelineStatus.lastAutoAcquisitionAt), { addSuffix: true })}
                 </span>
-                {pipelineStatus.lastAutoRunSummary ? (
-                  <> — {pipelineStatus.lastAutoRunSummary}</>
+                {pipelineStatus.lastAutoAcquisitionSummary ? (
+                  <> — {pipelineStatus.lastAutoAcquisitionSummary}</>
                 ) : null}
               </span>
             ) : (

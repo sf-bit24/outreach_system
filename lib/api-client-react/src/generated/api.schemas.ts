@@ -331,6 +331,10 @@ export interface SenderSettings {
   lastAutoRunAt?: string | null;
   /** @nullable */
   lastAutoRunSummary?: string | null;
+  /** @nullable */
+  lastAutoAcquisitionAt?: string | null;
+  /** @nullable */
+  lastAutoAcquisitionSummary?: string | null;
   updatedAt: string;
 }
 
@@ -432,5 +436,9 @@ export type GetPipelineStatus200 = {
   lastAutoRunAt?: string | null;
   /** @nullable */
   lastAutoRunSummary?: string | null;
+  /** @nullable */
+  lastAutoAcquisitionAt?: string | null;
+  /** @nullable */
+  lastAutoAcquisitionSummary?: string | null;
   nextRunAt: string;
 };

@@ -810,6 +810,8 @@ export const GetSenderSettingsResponse = zod.object({
   autoAssignCampaignId: zod.number().nullish(),
   lastAutoRunAt: zod.string().nullish(),
   lastAutoRunSummary: zod.string().nullish(),
+  lastAutoAcquisitionAt: zod.string().nullish(),
+  lastAutoAcquisitionSummary: zod.string().nullish(),
   updatedAt: zod.string(),
 });
 
@@ -886,6 +888,8 @@ export const UpdateSenderSettingsResponse = zod.object({
   autoAssignCampaignId: zod.number().nullish(),
   lastAutoRunAt: zod.string().nullish(),
   lastAutoRunSummary: zod.string().nullish(),
+  lastAutoAcquisitionAt: zod.string().nullish(),
+  lastAutoAcquisitionSummary: zod.string().nullish(),
   updatedAt: zod.string(),
 });
 
@@ -912,6 +916,8 @@ export const GetPipelineStatusResponse = zod.object({
   autoPipelineEnabled: zod.boolean(),
   lastAutoRunAt: zod.string().nullish(),
   lastAutoRunSummary: zod.string().nullish(),
+  lastAutoAcquisitionAt: zod.string().nullish(),
+  lastAutoAcquisitionSummary: zod.string().nullish(),
   nextRunAt: zod.string(),
 });
 
