@@ -148,7 +148,7 @@ export default function Settings() {
     autoAcquireCategories: "",
     autoAcquireCities: "",
     autoAcquireMaxPerRun: 50,
-    autoAssignCampaignId: "",
+    autoAssignCampaignId: "none",
   });
 
   useEffect(() => {
@@ -183,7 +183,7 @@ export default function Settings() {
           autoAcquireCategories: s.autoAcquireCategories.join(", "),
           autoAcquireCities: s.autoAcquireCities.join(", "),
           autoAcquireMaxPerRun: s.autoAcquireMaxPerRun,
-          autoAssignCampaignId: s.autoAssignCampaignId ? String(s.autoAssignCampaignId) : "",
+          autoAssignCampaignId: s.autoAssignCampaignId ? String(s.autoAssignCampaignId) : "none",
         });
       })
       .catch(() => toast({ title: "Erreur de chargement", variant: "destructive" }))
@@ -229,9 +229,10 @@ export default function Settings() {
           .map((s) => s.trim())
           .filter(Boolean),
         autoAcquireMaxPerRun: form.autoAcquireMaxPerRun,
-        autoAssignCampaignId: form.autoAssignCampaignId
-          ? Number(form.autoAssignCampaignId)
-          : null,
+        autoAssignCampaignId:
+          form.autoAssignCampaignId && form.autoAssignCampaignId !== "none"
+            ? Number(form.autoAssignCampaignId)
+            : null,
       };
       if (form.smtpPass) body.smtpPass = form.smtpPass;
       const updated = await patchSettings(body);
@@ -472,7 +473,7 @@ export default function Settings() {
                     <SelectValue placeholder="Aucune campagne" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Aucune (assignation manuelle)</SelectItem>
+                    <SelectItem value="none">Aucune (assignation manuelle)</SelectItem>
                     {campaigns.map((c) => (
                       <SelectItem key={c.id} value={String(c.id)}>
                         {c.name}

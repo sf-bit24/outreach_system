@@ -208,7 +208,7 @@ export function initAutoPipeline(): void {
     } catch (err) {
       logger.error({ err }, "Auto-pipeline: acquisition cron crashed");
     }
-  });
+  }, { timezone: "UTC" });
 
   // 03:00 UTC — enrichment
   cron.schedule("0 3 * * *", async () => {
@@ -219,7 +219,7 @@ export function initAutoPipeline(): void {
     } catch (err) {
       logger.error({ err }, "Auto-pipeline: enrichment cron crashed");
     }
-  });
+  }, { timezone: "UTC" });
 
   // 03:30 UTC — auto-assign to campaign
   cron.schedule("30 3 * * *", async () => {
@@ -230,7 +230,7 @@ export function initAutoPipeline(): void {
     } catch (err) {
       logger.error({ err }, "Auto-pipeline: auto-assign cron crashed");
     }
-  });
+  }, { timezone: "UTC" });
 
   logger.info("Auto-pipeline crons registered (02:00 acquire, 03:00 enrich, 03:30 assign — UTC)");
 }

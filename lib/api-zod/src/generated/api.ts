@@ -849,7 +849,7 @@ export const UpdateSenderSettingsBody = zod.object({
   autoAcquireCategories: zod.array(zod.string()).optional(),
   autoAcquireCities: zod.array(zod.string()).optional(),
   autoAcquireMaxPerRun: zod.number().optional(),
-  autoAssignCampaignId: zod.number().optional(),
+  autoAssignCampaignId: zod.number().nullish(),
 });
 
 export const UpdateSenderSettingsResponse = zod.object({

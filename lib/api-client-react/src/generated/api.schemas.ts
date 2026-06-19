@@ -363,7 +363,8 @@ export interface UpdateSenderSettingsBody {
   autoAcquireCategories?: string[];
   autoAcquireCities?: string[];
   autoAcquireMaxPerRun?: number;
-  autoAssignCampaignId?: number;
+  /** @nullable */
+  autoAssignCampaignId?: number | null;
 }
 
 export type ActivityItemType =

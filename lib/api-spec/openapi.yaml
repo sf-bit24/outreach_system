@@ -1154,7 +1154,7 @@ components:
         autoAcquireMaxPerRun:
           type: integer
         autoAssignCampaignId:
-          type: integer
+          type: ["integer", "null"]
 
     ActivityItem:
       type: object

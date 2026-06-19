@@ -2,14 +2,16 @@ import {
   useGetDashboardStats,
   useGetPipeline,
   useGetActivity,
+  useGetPipelineStatus,
 } from "@workspace/api-client-react";
 import {
   getGetDashboardStatsQueryKey,
   getGetPipelineQueryKey,
   getGetActivityQueryKey,
+  getGetPipelineStatusQueryKey,
 } from "@workspace/api-client-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { TrendingUp, Users, Mail, MailOpen, CornerDownRight, Megaphone } from "lucide-react";
+import { TrendingUp, Users, Mail, MailOpen, CornerDownRight, Megaphone, Bot } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import SetupChecklist from "@/components/SetupChecklist";
 
@@ -32,6 +34,9 @@ export default function Dashboard() {
   });
   const { data: activity, isLoading: activityLoading } = useGetActivity({
     query: { queryKey: getGetActivityQueryKey() },
+  });
+  const { data: pipelineStatus } = useGetPipelineStatus({
+    query: { queryKey: getGetPipelineStatusQueryKey() },
   });
 
   const statCards = [
@@ -98,6 +103,39 @@ export default function Dashboard() {
       </div>
 
       <SetupChecklist totalLeads={stats?.totalLeads ?? 0} emailsSent={stats?.emailsSent ?? 0} />
+
+      {/* Auto-pipeline status banner */}
+      {pipelineStatus && (
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Bot className="w-4 h-4 shrink-0" />
+            <span className="font-medium text-foreground">Pipeline automatique</span>
+          </div>
+          <span className="text-muted-foreground">·</span>
+          {pipelineStatus.autoPipelineEnabled ? (
+            pipelineStatus.lastAutoRunAt ? (
+              <span className="text-muted-foreground">
+                Dernière acquisition{" "}
+                <span className="text-foreground font-medium">
+                  {formatDistanceToNow(new Date(pipelineStatus.lastAutoRunAt), { addSuffix: true })}
+                </span>
+                {pipelineStatus.lastAutoRunSummary ? (
+                  <> — {pipelineStatus.lastAutoRunSummary}</>
+                ) : null}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">
+                Prochain run :{" "}
+                <span className="text-foreground font-medium">
+                  {new Date(pipelineStatus.nextRunAt).toLocaleString("fr-CA")}
+                </span>
+              </span>
+            )
+          ) : (
+            <span className="text-muted-foreground">Désactivé — configurez-le dans les Paramètres.</span>
+          )}
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
