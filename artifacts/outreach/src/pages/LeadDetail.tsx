@@ -143,8 +143,8 @@ export default function LeadDetail() {
     return (
       <div className="p-6 max-w-4xl mx-auto">
         <div className="text-sm text-destructive">Lead not found</div>
-        <Link href="/leads">
-          <a className="text-sm text-primary mt-2 inline-block">Back to leads</a>
+        <Link href="/leads" className="text-sm text-primary mt-2 inline-block">
+          Back to leads
         </Link>
       </div>
     );
@@ -161,12 +161,10 @@ export default function LeadDetail() {
     <div className="p-6 max-w-4xl mx-auto space-y-5">
       <div className="flex items-center gap-3">
         <Link href="/leads">
-          <a>
-            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </Button>
-          </a>
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </Button>
         </Link>
       </div>
 
@@ -296,6 +294,32 @@ export default function LeadDetail() {
               </div>
             </div>
 
+            {/* LCAP Compliance */}
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">Conformité LCAP (C-28)</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                {lead.lcapCompliant === null || lead.lcapCompliant === undefined ? (
+                  <AlertCircle className="w-4 h-4 text-muted-foreground" />
+                ) : lead.lcapCompliant ? (
+                  <CheckCircle className="w-4 h-4 text-emerald-500" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-red-500" />
+                )}
+                <span className="text-sm text-foreground">
+                  {lead.lcapCompliant === null || lead.lcapCompliant === undefined
+                    ? "Non évalué"
+                    : lead.lcapCompliant
+                    ? "Conforme"
+                    : "Non conforme"}
+                </span>
+              </div>
+              {lead.lcapReason && (
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  {lead.lcapReason}
+                </p>
+              )}
+            </div>
+
             {lead.intentSignal && (
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Intent Signal</p>
@@ -305,9 +329,36 @@ export default function LeadDetail() {
               </div>
             )}
 
-            {!lead.emailValid && !lead.isHiring && !lead.intentSignal && (
+            {lead.painPoint && (
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Pain Point détecté</p>
+                <p className="text-sm text-foreground mt-1 leading-relaxed">{lead.painPoint}</p>
+              </div>
+            )}
+
+            {lead.websiteSummary && (
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Résumé site web</p>
+                <p className="text-sm text-foreground mt-1 leading-relaxed">{lead.websiteSummary}</p>
+              </div>
+            )}
+
+            {lead.websiteKeywords && (
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Mots-clés</p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {lead.websiteKeywords.split(",").map((kw) => kw.trim()).filter(Boolean).map((kw) => (
+                    <span key={kw} className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-muted text-muted-foreground">
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {lead.emailValid === null && lead.lcapCompliant === null && !lead.isHiring && !lead.intentSignal && (
               <p className="text-sm text-muted-foreground">
-                No enrichment data yet. Click "Enrich" to gather intelligence.
+                Aucune donnée d'enrichissement. Cliquez sur "Enrich" pour analyser ce lead.
               </p>
             )}
           </div>
