@@ -15,6 +15,10 @@ function buildSettingsResponse(settings: Awaited<ReturnType<typeof getOrCreateSe
     warmupEffectiveLimit: computeWarmupLimit(settings),
     warmupStartDate: settings.warmupStartDate ? settings.warmupStartDate.toISOString() : null,
     updatedAt: settings.updatedAt.toISOString(),
+    // IMAP bounce detection — expose all three fields
+    bounceDetectionEnabled: settings.bounceDetectionEnabled,
+    imapHost: settings.imapHost ?? null,
+    imapPort: settings.imapPort,
   };
 }
 
@@ -85,6 +89,15 @@ router.patch("/settings/sender", async (req, res): Promise<void> => {
   if (typeof warmupStartVolume === "number") patch.warmupStartVolume = Math.max(1, Math.floor(warmupStartVolume));
   if (typeof warmupIncrement === "number") patch.warmupIncrement = Math.max(1, Math.floor(warmupIncrement));
   if (typeof warmupMaxVolume === "number") patch.warmupMaxVolume = Math.max(1, Math.floor(warmupMaxVolume));
+
+  const {
+    bounceDetectionEnabled,
+    imapHost,
+    imapPort,
+  } = body as Record<string, unknown>;
+  if (typeof bounceDetectionEnabled === "boolean") patch.bounceDetectionEnabled = bounceDetectionEnabled;
+  if (typeof imapHost === "string") patch.imapHost = imapHost || null;
+  if (typeof imapPort === "number") patch.imapPort = Math.max(1, Math.floor(imapPort));
 
   if (Object.keys(patch).length === 0) {
     const settings = await getOrCreateSenderSettings();

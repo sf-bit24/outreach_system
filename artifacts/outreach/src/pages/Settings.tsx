@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings as SettingsIcon, Mail, Server, Thermometer, CheckCircle2, XCircle, Loader2, Send } from "lucide-react";
+import { Settings as SettingsIcon, Mail, Server, Thermometer, CheckCircle2, XCircle, Loader2, Send, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +38,9 @@ interface SenderSettings {
   warmupIncrement: number;
   warmupMaxVolume: number;
   warmupEffectiveLimit: number;
+  bounceDetectionEnabled: boolean;
+  imapHost: string | null;
+  imapPort: number;
   updatedAt: string;
 }
 
@@ -120,6 +123,9 @@ export default function Settings() {
     warmupStartVolume: 5,
     warmupIncrement: 5,
     warmupMaxVolume: 50,
+    bounceDetectionEnabled: false,
+    imapHost: "",
+    imapPort: 993,
   });
 
   useEffect(() => {
@@ -146,6 +152,9 @@ export default function Settings() {
           warmupStartVolume: s.warmupStartVolume,
           warmupIncrement: s.warmupIncrement,
           warmupMaxVolume: s.warmupMaxVolume,
+          bounceDetectionEnabled: s.bounceDetectionEnabled,
+          imapHost: s.imapHost ?? "",
+          imapPort: s.imapPort,
         });
       })
       .catch(() => toast({ title: "Erreur de chargement", variant: "destructive" }))
@@ -178,6 +187,9 @@ export default function Settings() {
         warmupStartVolume: form.warmupStartVolume,
         warmupIncrement: form.warmupIncrement,
         warmupMaxVolume: form.warmupMaxVolume,
+        bounceDetectionEnabled: form.bounceDetectionEnabled,
+        imapHost: form.imapHost || undefined,
+        imapPort: form.imapPort,
       };
       if (form.smtpPass) body.smtpPass = form.smtpPass;
       const updated = await patchSettings(body);
@@ -366,6 +378,56 @@ export default function Settings() {
                 {" "}(cap absolu : {form.dailyLimit})
               </div>
             )}
+          </div>
+        )}
+      </Section>
+
+      {/* ── Détection des bounces IMAP ── */}
+      <Section title="Détection des bounces IMAP" icon={ShieldAlert}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Activer la détection automatique</p>
+            <p className="text-xs text-muted-foreground">
+              Interroge la boîte IMAP du compte expéditeur toutes les 15 min pour détecter
+              les DSN (bounces) et marquer les leads concernés comme non-joignables.
+            </p>
+          </div>
+          <Switch
+            checked={form.bounceDetectionEnabled}
+            onCheckedChange={(v) => set("bounceDetectionEnabled", v)}
+            disabled={form.transportMode !== "smtp"}
+          />
+        </div>
+
+        {form.transportMode !== "smtp" && (
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            La détection des bounces nécessite le mode de transport SMTP.
+          </p>
+        )}
+
+        {form.bounceDetectionEnabled && form.transportMode === "smtp" && (
+          <div className="grid grid-cols-2 gap-4 border border-dashed border-border rounded-md p-4">
+            <Field label="Hôte IMAP (optionnel)">
+              <Input
+                placeholder={form.smtpHost ? form.smtpHost.replace(/^smtp\./i, "imap.") : "imap.example.com"}
+                value={form.imapHost}
+                onChange={(e) => set("imapHost", e.target.value)}
+              />
+            </Field>
+            <Field label="Port IMAP">
+              <Input
+                type="number"
+                min={1}
+                max={65535}
+                value={form.imapPort}
+                onChange={(e) => set("imapPort", Number(e.target.value))}
+              />
+            </Field>
+            <div className="col-span-2 rounded-md bg-blue-50 border border-blue-200 p-3 text-xs text-blue-900">
+              Si l'hôte IMAP est vide, il est dérivé automatiquement depuis l'hôte SMTP
+              (ex : <code>smtp.hostinger.com</code> → <code>imap.hostinger.com</code>).
+              Les credentials (utilisateur + mot de passe) réutilisent ceux du compte SMTP.
+            </div>
           </div>
         )}
       </Section>

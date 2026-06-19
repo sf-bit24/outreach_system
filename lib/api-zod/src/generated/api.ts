@@ -22,6 +22,7 @@ export const ListLeadsQueryParams = zod.object({
   campaignId: zod.coerce.number().nullish(),
   search: zod.coerce.string().optional(),
   source: zod.coerce.string().optional(),
+  emailStatus: zod.coerce.string().optional(),
 });
 
 export const ListLeadsResponseItem = zod.object({
@@ -799,6 +800,9 @@ export const GetSenderSettingsResponse = zod.object({
   warmupIncrement: zod.number(),
   warmupMaxVolume: zod.number(),
   warmupEffectiveLimit: zod.number(),
+  bounceDetectionEnabled: zod.boolean(),
+  imapHost: zod.string().nullish(),
+  imapPort: zod.number(),
   updatedAt: zod.string(),
 });
 
@@ -831,6 +835,9 @@ export const UpdateSenderSettingsBody = zod.object({
   warmupStartVolume: zod.number().optional(),
   warmupIncrement: zod.number().optional(),
   warmupMaxVolume: zod.number().optional(),
+  bounceDetectionEnabled: zod.boolean().optional(),
+  imapHost: zod.string().optional(),
+  imapPort: zod.number().optional(),
 });
 
 export const UpdateSenderSettingsResponse = zod.object({
@@ -857,6 +864,9 @@ export const UpdateSenderSettingsResponse = zod.object({
   warmupIncrement: zod.number(),
   warmupMaxVolume: zod.number(),
   warmupEffectiveLimit: zod.number(),
+  bounceDetectionEnabled: zod.boolean(),
+  imapHost: zod.string().nullish(),
+  imapPort: zod.number(),
   updatedAt: zod.string(),
 });
 

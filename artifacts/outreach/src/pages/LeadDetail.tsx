@@ -224,7 +224,17 @@ export default function LeadDetail() {
                 {lead.emailSource && (
                   <EmailSourceBadge source={lead.emailSource} />
                 )}
+                {lead.emailStatus === "bounced" && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
+                    🚫 Bounced
+                  </span>
+                )}
               </div>
+              {lead.emailStatus === "bounced" && lead.bouncedAt && (
+                <p className="text-xs text-red-600 mt-1">
+                  Détecté le {new Date(lead.bouncedAt).toLocaleDateString("fr-CA", { year: "numeric", month: "long", day: "numeric" })}
+                </p>
+              )}
             </div>
 
             <div>

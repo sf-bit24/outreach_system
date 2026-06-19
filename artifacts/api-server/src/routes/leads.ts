@@ -28,12 +28,13 @@ router.get("/leads", async (req, res): Promise<void> => {
     return;
   }
 
-  const { stage, campaignId, search, source } = parsed.data;
+  const { stage, campaignId, search, source, emailStatus } = parsed.data as typeof parsed.data & { emailStatus?: string };
   const conditions: SQL[] = [];
 
   if (stage) conditions.push(eq(leadsTable.stage, stage as any));
   if (campaignId != null) conditions.push(eq(leadsTable.campaignId, campaignId));
   if (source) conditions.push(eq(leadsTable.source, source));
+  if (emailStatus) conditions.push(eq(leadsTable.emailStatus, emailStatus));
   if (search) {
     const term = `%${search}%`;
     const cond = or(

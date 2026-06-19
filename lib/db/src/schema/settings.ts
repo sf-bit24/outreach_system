@@ -38,6 +38,10 @@ export const senderSettingsTable = pgTable("sender_settings", {
   warmupIncrement: integer("warmup_increment").notNull().default(5),
   warmupMaxVolume: integer("warmup_max_volume").notNull().default(50),
 
+  bounceDetectionEnabled: boolean("bounce_detection_enabled").notNull().default(false),
+  imapHost: text("imap_host"),
+  imapPort: integer("imap_port").notNull().default(993),
+
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()

@@ -58,6 +58,10 @@ paths:
           name: source
           schema:
             type: string
+        - in: query
+          name: emailStatus
+          schema:
+            type: string
       responses:
         "200":
           description: List of leads
@@ -1008,6 +1012,12 @@ components:
           type: integer
         warmupEffectiveLimit:
           type: integer
+        bounceDetectionEnabled:
+          type: boolean
+        imapHost:
+          type: ["string", "null"]
+        imapPort:
+          type: integer
         updatedAt:
           type: string
       required:
@@ -1030,6 +1040,8 @@ components:
         - warmupIncrement
         - warmupMaxVolume
         - warmupEffectiveLimit
+        - bounceDetectionEnabled
+        - imapPort
         - updatedAt
 
     UpdateSenderSettingsBody:
@@ -1075,6 +1087,12 @@ components:
         warmupIncrement:
           type: integer
         warmupMaxVolume:
+          type: integer
+        bounceDetectionEnabled:
+          type: boolean
+        imapHost:
+          type: string
+        imapPort:
           type: integer
 
     ActivityItem:

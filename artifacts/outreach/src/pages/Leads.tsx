@@ -70,6 +70,7 @@ export default function Leads() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [emailStatusFilter, setEmailStatusFilter] = useState<string>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -77,6 +78,7 @@ export default function Leads() {
   const params = {
     ...(stageFilter !== "all" ? { stage: stageFilter } : {}),
     ...(sourceFilter !== "all" ? { source: sourceFilter } : {}),
+    ...(emailStatusFilter !== "all" ? { emailStatus: emailStatusFilter } : {}),
     ...(search ? { search } : {}),
   };
 
@@ -320,6 +322,18 @@ export default function Leads() {
             <SelectItem value="apollo_api">Apollo (API)</SelectItem>
             <SelectItem value="apollo_scrape">Apollo (scrape)</SelectItem>
             <SelectItem value="linkedin_scrape">LinkedIn</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={emailStatusFilter} onValueChange={setEmailStatusFilter}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Statut email" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les statuts</SelectItem>
+            <SelectItem value="verified">✓ Vérifié</SelectItem>
+            <SelectItem value="needs_enrichment">⏳ À enrichir</SelectItem>
+            <SelectItem value="bounced">🚫 Bounced</SelectItem>
+            <SelectItem value="invalid">✗ Invalide</SelectItem>
           </SelectContent>
         </Select>
       </div>

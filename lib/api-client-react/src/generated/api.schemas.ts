@@ -317,6 +317,10 @@ export interface SenderSettings {
   warmupIncrement: number;
   warmupMaxVolume: number;
   warmupEffectiveLimit: number;
+  bounceDetectionEnabled: boolean;
+  /** @nullable */
+  imapHost?: string | null;
+  imapPort: number;
   updatedAt: string;
 }
 
@@ -342,6 +346,9 @@ export interface UpdateSenderSettingsBody {
   warmupStartVolume?: number;
   warmupIncrement?: number;
   warmupMaxVolume?: number;
+  bounceDetectionEnabled?: boolean;
+  imapHost?: string;
+  imapPort?: number;
 }
 
 export type ActivityItemType =
@@ -377,6 +384,7 @@ export type ListLeadsParams = {
   campaignId?: number | null;
   search?: string;
   source?: string;
+  emailStatus?: string;
 };
 
 export type ListEmailsParams = {
