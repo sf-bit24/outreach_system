@@ -25,6 +25,7 @@ import type {
   Email,
   Error,
   GenerateEmailBody,
+  GetPipelineStatus200,
   HealthStatus,
   ImportLeadsBody,
   ImportLeadsResult,
@@ -2143,6 +2144,81 @@ export const useTestSenderSettings = <
 > => {
   return useMutation(getTestSenderSettingsMutationOptions(options));
 };
+
+/**
+ * @summary Get nightly auto-pipeline status and next scheduled run
+ */
+export const getGetPipelineStatusUrl = () => {
+  return `/api/settings/pipeline-status`;
+};
+
+export const getPipelineStatus = async (
+  options?: RequestInit,
+): Promise<GetPipelineStatus200> => {
+  return customFetch<GetPipelineStatus200>(getGetPipelineStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPipelineStatusQueryKey = () => {
+  return [`/api/settings/pipeline-status`] as const;
+};
+
+export const getGetPipelineStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPipelineStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPipelineStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPipelineStatusQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPipelineStatus>>
+  > = ({ signal }) => getPipelineStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPipelineStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPipelineStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPipelineStatus>>
+>;
+export type GetPipelineStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get nightly auto-pipeline status and next scheduled run
+ */
+
+export function useGetPipelineStatus<
+  TData = Awaited<ReturnType<typeof getPipelineStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPipelineStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPipelineStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get recent activity feed

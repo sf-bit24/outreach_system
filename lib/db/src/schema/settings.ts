@@ -5,6 +5,7 @@ import {
   timestamp,
   integer,
   boolean,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -41,6 +42,14 @@ export const senderSettingsTable = pgTable("sender_settings", {
   bounceDetectionEnabled: boolean("bounce_detection_enabled").notNull().default(false),
   imapHost: text("imap_host"),
   imapPort: integer("imap_port").notNull().default(993),
+
+  autoPipelineEnabled: boolean("auto_pipeline_enabled").notNull().default(false),
+  autoAcquireCategories: jsonb("auto_acquire_categories").$type<string[]>().notNull().default([]),
+  autoAcquireCities: jsonb("auto_acquire_cities").$type<string[]>().notNull().default([]),
+  autoAcquireMaxPerRun: integer("auto_acquire_max_per_run").notNull().default(50),
+  autoAssignCampaignId: integer("auto_assign_campaign_id"),
+  lastAutoRunAt: timestamp("last_auto_run_at", { withTimezone: true }),
+  lastAutoRunSummary: text("last_auto_run_summary"),
 
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()

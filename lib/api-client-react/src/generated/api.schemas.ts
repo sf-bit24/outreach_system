@@ -321,6 +321,16 @@ export interface SenderSettings {
   /** @nullable */
   imapHost?: string | null;
   imapPort: number;
+  autoPipelineEnabled: boolean;
+  autoAcquireCategories: string[];
+  autoAcquireCities: string[];
+  autoAcquireMaxPerRun: number;
+  /** @nullable */
+  autoAssignCampaignId?: number | null;
+  /** @nullable */
+  lastAutoRunAt?: string | null;
+  /** @nullable */
+  lastAutoRunSummary?: string | null;
   updatedAt: string;
 }
 
@@ -349,6 +359,11 @@ export interface UpdateSenderSettingsBody {
   bounceDetectionEnabled?: boolean;
   imapHost?: string;
   imapPort?: number;
+  autoPipelineEnabled?: boolean;
+  autoAcquireCategories?: string[];
+  autoAcquireCities?: string[];
+  autoAcquireMaxPerRun?: number;
+  autoAssignCampaignId?: number;
 }
 
 export type ActivityItemType =
@@ -408,4 +423,13 @@ export type TestSenderSettings200 = {
   success: boolean;
   message: string;
   providerMessageId?: string;
+};
+
+export type GetPipelineStatus200 = {
+  autoPipelineEnabled: boolean;
+  /** @nullable */
+  lastAutoRunAt?: string | null;
+  /** @nullable */
+  lastAutoRunSummary?: string | null;
+  nextRunAt: string;
 };

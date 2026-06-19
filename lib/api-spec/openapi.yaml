@@ -521,6 +521,31 @@ paths:
                   - success
                   - message
 
+  /settings/pipeline-status:
+    get:
+      operationId: getPipelineStatus
+      tags: [settings]
+      summary: Get nightly auto-pipeline status and next scheduled run
+      responses:
+        "200":
+          description: Pipeline status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  autoPipelineEnabled:
+                    type: boolean
+                  lastAutoRunAt:
+                    type: ["string", "null"]
+                  lastAutoRunSummary:
+                    type: ["string", "null"]
+                  nextRunAt:
+                    type: string
+                required:
+                  - autoPipelineEnabled
+                  - nextRunAt
+
   /dashboard/activity:
     get:
       operationId: getActivity
@@ -1018,6 +1043,24 @@ components:
           type: ["string", "null"]
         imapPort:
           type: integer
+        autoPipelineEnabled:
+          type: boolean
+        autoAcquireCategories:
+          type: array
+          items:
+            type: string
+        autoAcquireCities:
+          type: array
+          items:
+            type: string
+        autoAcquireMaxPerRun:
+          type: integer
+        autoAssignCampaignId:
+          type: ["integer", "null"]
+        lastAutoRunAt:
+          type: ["string", "null"]
+        lastAutoRunSummary:
+          type: ["string", "null"]
         updatedAt:
           type: string
       required:
@@ -1042,6 +1085,10 @@ components:
         - warmupEffectiveLimit
         - bounceDetectionEnabled
         - imapPort
+        - autoPipelineEnabled
+        - autoAcquireCategories
+        - autoAcquireCities
+        - autoAcquireMaxPerRun
         - updatedAt
 
     UpdateSenderSettingsBody:
@@ -1093,6 +1140,20 @@ components:
         imapHost:
           type: string
         imapPort:
+          type: integer
+        autoPipelineEnabled:
+          type: boolean
+        autoAcquireCategories:
+          type: array
+          items:
+            type: string
+        autoAcquireCities:
+          type: array
+          items:
+            type: string
+        autoAcquireMaxPerRun:
+          type: integer
+        autoAssignCampaignId:
           type: integer
 
     ActivityItem:

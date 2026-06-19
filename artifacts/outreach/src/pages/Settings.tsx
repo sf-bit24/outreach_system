@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings as SettingsIcon, Mail, Server, Thermometer, CheckCircle2, XCircle, Loader2, Send, ShieldAlert } from "lucide-react";
+import { Settings as SettingsIcon, Mail, Server, Thermometer, CheckCircle2, XCircle, Loader2, Send, ShieldAlert, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,6 +41,13 @@ interface SenderSettings {
   bounceDetectionEnabled: boolean;
   imapHost: string | null;
   imapPort: number;
+  autoPipelineEnabled: boolean;
+  autoAcquireCategories: string[];
+  autoAcquireCities: string[];
+  autoAcquireMaxPerRun: number;
+  autoAssignCampaignId: number | null;
+  lastAutoRunAt: string | null;
+  lastAutoRunSummary: string | null;
   updatedAt: string;
 }
 
@@ -63,6 +70,15 @@ async function patchSettings(body: Record<string, unknown>): Promise<SenderSetti
     throw new Error(e.error ?? r.statusText);
   }
   return r.json();
+}
+
+interface Campaign { id: number; name: string; }
+
+async function fetchCampaigns(): Promise<Campaign[]> {
+  const r = await fetch(`${BASE}/api/campaigns`);
+  if (!r.ok) return [];
+  const data = await r.json();
+  return Array.isArray(data) ? data : (data.campaigns ?? []);
 }
 
 async function testSend(to?: string): Promise<{ success: boolean; message: string }> {
@@ -103,6 +119,8 @@ export default function Settings() {
   const [testing, setTesting] = useState(false);
   const [testTo, setTestTo] = useState("");
 
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+
   const [form, setForm] = useState({
     senderName: "",
     senderEmail: "",
@@ -126,11 +144,17 @@ export default function Settings() {
     bounceDetectionEnabled: false,
     imapHost: "",
     imapPort: 993,
+    autoPipelineEnabled: false,
+    autoAcquireCategories: "",
+    autoAcquireCities: "",
+    autoAcquireMaxPerRun: 50,
+    autoAssignCampaignId: "",
   });
 
   useEffect(() => {
-    fetchSettings()
-      .then((s) => {
+    Promise.all([fetchSettings(), fetchCampaigns()])
+      .then(([s, c]) => {
+        setCampaigns(c);
         setSettings(s);
         setForm({
           senderName: s.senderName,
@@ -155,6 +179,11 @@ export default function Settings() {
           bounceDetectionEnabled: s.bounceDetectionEnabled,
           imapHost: s.imapHost ?? "",
           imapPort: s.imapPort,
+          autoPipelineEnabled: s.autoPipelineEnabled,
+          autoAcquireCategories: s.autoAcquireCategories.join(", "),
+          autoAcquireCities: s.autoAcquireCities.join(", "),
+          autoAcquireMaxPerRun: s.autoAcquireMaxPerRun,
+          autoAssignCampaignId: s.autoAssignCampaignId ? String(s.autoAssignCampaignId) : "",
         });
       })
       .catch(() => toast({ title: "Erreur de chargement", variant: "destructive" }))
@@ -190,6 +219,19 @@ export default function Settings() {
         bounceDetectionEnabled: form.bounceDetectionEnabled,
         imapHost: form.imapHost || undefined,
         imapPort: form.imapPort,
+        autoPipelineEnabled: form.autoPipelineEnabled,
+        autoAcquireCategories: form.autoAcquireCategories
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        autoAcquireCities: form.autoAcquireCities
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        autoAcquireMaxPerRun: form.autoAcquireMaxPerRun,
+        autoAssignCampaignId: form.autoAssignCampaignId
+          ? Number(form.autoAssignCampaignId)
+          : null,
       };
       if (form.smtpPass) body.smtpPass = form.smtpPass;
       const updated = await patchSettings(body);
@@ -376,6 +418,91 @@ export default function Settings() {
                 <strong>Limite effective aujourd'hui :</strong>{" "}
                 {settings.warmupEffectiveLimit} emails
                 {" "}(cap absolu : {form.dailyLimit})
+              </div>
+            )}
+          </div>
+        )}
+      </Section>
+
+      {/* ── Pipeline automatique nocturne ── */}
+      <Section title="Pipeline automatique nocturne" icon={Bot}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Activer le pipeline automatique</p>
+            <p className="text-xs text-muted-foreground">
+              Chaque nuit : acquisition Google Maps (02h UTC) → enrichissement (03h) → assignation campagne (03h30).
+              Aucune action manuelle requise.
+            </p>
+          </div>
+          <Switch checked={form.autoPipelineEnabled} onCheckedChange={(v) => set("autoPipelineEnabled", v)} />
+        </div>
+
+        {form.autoPipelineEnabled && (
+          <div className="space-y-4 border border-dashed border-border rounded-md p-4">
+            <Field label="Catégories Google Maps (séparées par des virgules)">
+              <Input
+                value={form.autoAcquireCategories}
+                onChange={(e) => set("autoAcquireCategories", e.target.value)}
+                placeholder="restaurant, plombier, avocat, comptable"
+              />
+            </Field>
+            <Field label="Villes (séparées par des virgules)">
+              <Input
+                value={form.autoAcquireCities}
+                onChange={(e) => set("autoAcquireCities", e.target.value)}
+                placeholder="Montréal, Québec, Laval, Longueuil"
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Max leads / nuit">
+                <Input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={form.autoAcquireMaxPerRun}
+                  onChange={(e) => set("autoAcquireMaxPerRun", Number(e.target.value))}
+                />
+              </Field>
+              <Field label="Campagne par défaut (auto-assign)">
+                <Select
+                  value={form.autoAssignCampaignId}
+                  onValueChange={(v) => set("autoAssignCampaignId", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Aucune campagne" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Aucune (assignation manuelle)</SelectItem>
+                    {campaigns.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+
+            {settings?.lastAutoRunAt && (
+              <div className="rounded-md bg-muted p-3 space-y-1 text-xs">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                  <span className="font-medium">Dernière exécution :</span>
+                  <span className="text-muted-foreground">
+                    {new Date(settings.lastAutoRunAt).toLocaleString("fr-CA")}
+                  </span>
+                </div>
+                {settings.lastAutoRunSummary && (
+                  <p className="text-muted-foreground pl-5">{settings.lastAutoRunSummary}</p>
+                )}
+              </div>
+            )}
+            {!settings?.lastAutoRunAt && (
+              <div className="rounded-md bg-blue-50 border border-blue-200 p-3 text-xs text-blue-900">
+                Prochain démarrage : <strong>02h00 UTC</strong> — acquisition de{" "}
+                {form.autoAcquireCategories.split(",").filter(Boolean).length || "?"} catégorie(s) ×{" "}
+                {form.autoAcquireCities.split(",").filter(Boolean).length || "?"} ville(s), max{" "}
+                {form.autoAcquireMaxPerRun} leads.
               </div>
             )}
           </div>

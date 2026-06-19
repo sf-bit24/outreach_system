@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, senderSettingsTable } from "@workspace/db";
 import { getOrCreateSenderSettings, computeWarmupLimit } from "../pipeline/queue";
 import { isResendConfigured, encryptSmtpPass, sendEmail, buildLcapEmail } from "../pipeline/sender";
+import { nextRunAt } from "../pipeline/autoPipeline";
 
 const router: IRouter = Router();
 
@@ -15,10 +16,18 @@ function buildSettingsResponse(settings: Awaited<ReturnType<typeof getOrCreateSe
     warmupEffectiveLimit: computeWarmupLimit(settings),
     warmupStartDate: settings.warmupStartDate ? settings.warmupStartDate.toISOString() : null,
     updatedAt: settings.updatedAt.toISOString(),
-    // IMAP bounce detection — expose all three fields
+    // IMAP bounce detection
     bounceDetectionEnabled: settings.bounceDetectionEnabled,
     imapHost: settings.imapHost ?? null,
     imapPort: settings.imapPort,
+    // Auto-pipeline
+    autoPipelineEnabled: settings.autoPipelineEnabled,
+    autoAcquireCategories: (settings.autoAcquireCategories as string[]) ?? [],
+    autoAcquireCities: (settings.autoAcquireCities as string[]) ?? [],
+    autoAcquireMaxPerRun: settings.autoAcquireMaxPerRun,
+    autoAssignCampaignId: settings.autoAssignCampaignId ?? null,
+    lastAutoRunAt: settings.lastAutoRunAt ? settings.lastAutoRunAt.toISOString() : null,
+    lastAutoRunSummary: settings.lastAutoRunSummary ?? null,
   };
 }
 
@@ -99,6 +108,24 @@ router.patch("/settings/sender", async (req, res): Promise<void> => {
   if (typeof imapHost === "string") patch.imapHost = imapHost || null;
   if (typeof imapPort === "number") patch.imapPort = Math.max(1, Math.floor(imapPort));
 
+  const {
+    autoPipelineEnabled,
+    autoAcquireCategories,
+    autoAcquireCities,
+    autoAcquireMaxPerRun,
+    autoAssignCampaignId,
+  } = body as Record<string, unknown>;
+  if (typeof autoPipelineEnabled === "boolean") patch.autoPipelineEnabled = autoPipelineEnabled;
+  if (Array.isArray(autoAcquireCategories)) {
+    patch.autoAcquireCategories = autoAcquireCategories.filter((c): c is string => typeof c === "string" && c.trim().length > 0);
+  }
+  if (Array.isArray(autoAcquireCities)) {
+    patch.autoAcquireCities = autoAcquireCities.filter((c): c is string => typeof c === "string" && c.trim().length > 0);
+  }
+  if (typeof autoAcquireMaxPerRun === "number") patch.autoAcquireMaxPerRun = Math.max(1, Math.floor(autoAcquireMaxPerRun));
+  if (typeof autoAssignCampaignId === "number") patch.autoAssignCampaignId = Math.floor(autoAssignCampaignId);
+  if (autoAssignCampaignId === null) patch.autoAssignCampaignId = null;
+
   if (Object.keys(patch).length === 0) {
     const settings = await getOrCreateSenderSettings();
     res.json(buildSettingsResponse(settings));
@@ -176,6 +203,16 @@ router.post("/settings/sender/test", async (req, res): Promise<void> => {
       ? `Email de test envoyé via ${modeLabel} → ${to}`
       : `Échec : ${result.error}`,
     providerMessageId: result.providerMessageId,
+  });
+});
+
+router.get("/settings/pipeline-status", async (_req, res): Promise<void> => {
+  const settings = await getOrCreateSenderSettings();
+  res.json({
+    autoPipelineEnabled: settings.autoPipelineEnabled,
+    lastAutoRunAt: settings.lastAutoRunAt ? settings.lastAutoRunAt.toISOString() : null,
+    lastAutoRunSummary: settings.lastAutoRunSummary ?? null,
+    nextRunAt: nextRunAt(),
   });
 });
 

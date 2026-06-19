@@ -803,6 +803,13 @@ export const GetSenderSettingsResponse = zod.object({
   bounceDetectionEnabled: zod.boolean(),
   imapHost: zod.string().nullish(),
   imapPort: zod.number(),
+  autoPipelineEnabled: zod.boolean(),
+  autoAcquireCategories: zod.array(zod.string()),
+  autoAcquireCities: zod.array(zod.string()),
+  autoAcquireMaxPerRun: zod.number(),
+  autoAssignCampaignId: zod.number().nullish(),
+  lastAutoRunAt: zod.string().nullish(),
+  lastAutoRunSummary: zod.string().nullish(),
   updatedAt: zod.string(),
 });
 
@@ -838,6 +845,11 @@ export const UpdateSenderSettingsBody = zod.object({
   bounceDetectionEnabled: zod.boolean().optional(),
   imapHost: zod.string().optional(),
   imapPort: zod.number().optional(),
+  autoPipelineEnabled: zod.boolean().optional(),
+  autoAcquireCategories: zod.array(zod.string()).optional(),
+  autoAcquireCities: zod.array(zod.string()).optional(),
+  autoAcquireMaxPerRun: zod.number().optional(),
+  autoAssignCampaignId: zod.number().optional(),
 });
 
 export const UpdateSenderSettingsResponse = zod.object({
@@ -867,6 +879,13 @@ export const UpdateSenderSettingsResponse = zod.object({
   bounceDetectionEnabled: zod.boolean(),
   imapHost: zod.string().nullish(),
   imapPort: zod.number(),
+  autoPipelineEnabled: zod.boolean(),
+  autoAcquireCategories: zod.array(zod.string()),
+  autoAcquireCities: zod.array(zod.string()),
+  autoAcquireMaxPerRun: zod.number(),
+  autoAssignCampaignId: zod.number().nullish(),
+  lastAutoRunAt: zod.string().nullish(),
+  lastAutoRunSummary: zod.string().nullish(),
   updatedAt: zod.string(),
 });
 
@@ -884,6 +903,16 @@ export const TestSenderSettingsResponse = zod.object({
   success: zod.boolean(),
   message: zod.string(),
   providerMessageId: zod.string().optional(),
+});
+
+/**
+ * @summary Get nightly auto-pipeline status and next scheduled run
+ */
+export const GetPipelineStatusResponse = zod.object({
+  autoPipelineEnabled: zod.boolean(),
+  lastAutoRunAt: zod.string().nullish(),
+  lastAutoRunSummary: zod.string().nullish(),
+  nextRunAt: zod.string(),
 });
 
 /**
