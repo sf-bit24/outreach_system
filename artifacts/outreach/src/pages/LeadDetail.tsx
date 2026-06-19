@@ -12,13 +12,34 @@ import {
   getGetDashboardStatsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, RefreshCw, Mail, Send, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { ArrowLeft, RefreshCw, Mail, Send, CheckCircle, XCircle, AlertCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import StageBadge from "@/components/StageBadge";
 import { EmailStatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow, format } from "date-fns";
+
+const EMAIL_SOURCE_LABELS: Record<string, { label: string; color: string }> = {
+  website_crawl: { label: "Site web", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" },
+  hunter_domain: { label: "Hunter domain", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  hunter_finder: { label: "Hunter finder", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  dropcontact:   { label: "Dropcontact",   color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
+  pre_existing:  { label: "Existant",      color: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400" },
+};
+
+function EmailSourceBadge({ source }: { source: string }) {
+  const meta = EMAIL_SOURCE_LABELS[source] ?? {
+    label: source,
+    color: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${meta.color}`}>
+      <Search className="w-3 h-3" />
+      {meta.label}
+    </span>
+  );
+}
 
 export default function LeadDetail() {
   const { id } = useParams<{ id: string }>();
@@ -200,6 +221,9 @@ export default function LeadDetail() {
                     ? "Valid"
                     : "Invalid"}
                 </span>
+                {lead.emailSource && (
+                  <EmailSourceBadge source={lead.emailSource} />
+                )}
               </div>
             </div>
 

@@ -47,6 +47,8 @@ export const leadsTable = pgTable("leads", {
   sourceUrl: text("source_url"),
   emailStatus: text("email_status"),
   emailLocked: boolean("email_locked").notNull().default(false),
+  emailSource: text("email_source"),
+  bouncedAt: timestamp("bounced_at", { withTimezone: true }),
   scrapedAt: timestamp("scraped_at", { withTimezone: true }),
   unsubscribeToken: text("unsubscribe_token").unique(),
   unsubscribed: boolean("unsubscribed").notNull().default(false),

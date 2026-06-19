@@ -36,7 +36,14 @@ export const ListLeadsResponseItem = zod.object({
   source: zod.string().nullish(),
   sourceUrl: zod.string().nullish(),
   emailStatus: zod.string().nullish(),
+  emailSource: zod
+    .string()
+    .nullish()
+    .describe(
+      "Which enrichment step found the verified email: website_crawl | hunter_domain | hunter_finder | dropcontact\n",
+    ),
   emailLocked: zod.boolean().optional(),
+  bouncedAt: zod.string().nullish(),
   scrapedAt: zod.string().nullish(),
   phone: zod.string().nullish(),
   industry: zod.string().nullish(),
@@ -138,7 +145,14 @@ export const GetLeadResponse = zod.object({
   source: zod.string().nullish(),
   sourceUrl: zod.string().nullish(),
   emailStatus: zod.string().nullish(),
+  emailSource: zod
+    .string()
+    .nullish()
+    .describe(
+      "Which enrichment step found the verified email: website_crawl | hunter_domain | hunter_finder | dropcontact\n",
+    ),
   emailLocked: zod.boolean().optional(),
+  bouncedAt: zod.string().nullish(),
   scrapedAt: zod.string().nullish(),
   phone: zod.string().nullish(),
   industry: zod.string().nullish(),
@@ -207,7 +221,14 @@ export const UpdateLeadResponse = zod.object({
   source: zod.string().nullish(),
   sourceUrl: zod.string().nullish(),
   emailStatus: zod.string().nullish(),
+  emailSource: zod
+    .string()
+    .nullish()
+    .describe(
+      "Which enrichment step found the verified email: website_crawl | hunter_domain | hunter_finder | dropcontact\n",
+    ),
   emailLocked: zod.boolean().optional(),
+  bouncedAt: zod.string().nullish(),
   scrapedAt: zod.string().nullish(),
   phone: zod.string().nullish(),
   industry: zod.string().nullish(),
@@ -266,7 +287,14 @@ export const EnrichLeadResponse = zod.object({
   source: zod.string().nullish(),
   sourceUrl: zod.string().nullish(),
   emailStatus: zod.string().nullish(),
+  emailSource: zod
+    .string()
+    .nullish()
+    .describe(
+      "Which enrichment step found the verified email: website_crawl | hunter_domain | hunter_finder | dropcontact\n",
+    ),
   emailLocked: zod.boolean().optional(),
+  bouncedAt: zod.string().nullish(),
   scrapedAt: zod.string().nullish(),
   phone: zod.string().nullish(),
   industry: zod.string().nullish(),

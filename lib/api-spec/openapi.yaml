@@ -575,8 +575,15 @@ components:
           type: ["string", "null"]
         emailStatus:
           type: ["string", "null"]
+        emailSource:
+          type: ["string", "null"]
+          description: >
+            Which enrichment step found the verified email:
+            website_crawl | hunter_domain | hunter_finder | dropcontact
         emailLocked:
           type: boolean
+        bouncedAt:
+          type: ["string", "null"]
         scrapedAt:
           type: ["string", "null"]
         phone:

@@ -8,6 +8,8 @@ import {
   findContactEmails,
 } from "./websiteScraper";
 import { assessLcap, generateUnsubscribeToken } from "./lcap";
+import { hunterDomainSearch, hunterEmailFinder } from "./hunterClient";
+import { dropcontactEnrich } from "./dropcontactClient";
 import { logger } from "../lib/logger";
 
 export interface EnrichResult {
@@ -84,12 +86,134 @@ async function discoverVerifiedEmail(
 }
 
 /**
+ * Try to SMTP-verify a single email candidate. Returns the lowercase email on
+ * success or null.
+ */
+async function smtpVerify(email: string): Promise<string | null> {
+  const syntax = await validateEmail(email);
+  if (!syntax.valid) return null;
+  const smtp = await verifyEmailSmtp(email);
+  return smtp.status === "deliverable" ? email.toLowerCase() : null;
+}
+
+/**
+ * Result from the Hunter / Dropcontact cascade.
+ */
+interface CascadeResult {
+  email: string;
+  /** Identifies which step found this email. */
+  source: "hunter_domain" | "hunter_finder" | "dropcontact";
+  note: string;
+}
+
+/**
+ * Fallback enrichment cascade for leads whose website did not expose a contact
+ * email.  Tries three external sources in order, stopping as soon as one yields
+ * an SMTP-deliverable address:
+ *
+ *  1. Hunter domain search (published addresses for the company domain)
+ *  2. Hunter email finder (predicted address, requires first + last name)
+ *  3. Dropcontact (RGPD/LCAP-compatible B2B enrichment, async)
+ *
+ * Every candidate is confirmed via SMTP RCPT TO before being adopted.
+ * NEVER invents an address.
+ *
+ * Returns null (silently) when no key is configured or nothing verifies.
+ */
+async function enrichFromCascade(lead: Lead): Promise<CascadeResult | null> {
+  const website = lead.website ?? null;
+
+  // Extract a clean domain from the website URL
+  let domain: string | null = null;
+  if (website) {
+    try {
+      domain = new URL(website).hostname.replace(/^www\./i, "");
+    } catch {
+      // not a valid URL — skip domain-based steps
+    }
+  }
+
+  // ── Step 1: Hunter domain search ──────────────────────────────────────────
+  if (domain) {
+    const domainEmails = await hunterDomainSearch(domain);
+    logger.info(
+      { leadId: lead.id, domain, found: domainEmails.length },
+      "Hunter domain search result",
+    );
+    // Try the top-scored addresses (max 5 SMTP attempts to control latency)
+    const topCandidates = domainEmails.slice(0, 5);
+    for (const entry of topCandidates) {
+      const verified = await smtpVerify(entry.email);
+      if (verified) {
+        return {
+          email: verified,
+          source: "hunter_domain",
+          note: `Email trouvé via Hunter domain search (${domain}) et vérifié par SMTP.`,
+        };
+      }
+    }
+  }
+
+  // ── Step 2: Hunter email finder (requires firstName + lastName) ────────────
+  if (domain) {
+    const fn = (lead.firstName ?? "").replace(/^—$/, "").trim();
+    const ln = (lead.lastName ?? "").replace(/^—$/, "").trim();
+    if (fn && ln) {
+      const finder = await hunterEmailFinder(domain, fn, ln);
+      logger.info(
+        { leadId: lead.id, domain, found: !!finder },
+        "Hunter email finder result",
+      );
+      if (finder) {
+        const verified = await smtpVerify(finder.email);
+        if (verified) {
+          return {
+            email: verified,
+            source: "hunter_finder",
+            note: `Email prédit par Hunter email finder (score ${finder.score}) et vérifié par SMTP.`,
+          };
+        }
+      }
+    }
+  }
+
+  // ── Step 3: Dropcontact ────────────────────────────────────────────────────
+  const fn = (lead.firstName ?? "").replace(/^—$/, "").trim();
+  const ln = (lead.lastName ?? "").replace(/^—$/, "").trim();
+  if (fn && ln) {
+    const dc = await dropcontactEnrich({
+      firstName: fn,
+      lastName: ln,
+      company: lead.company ?? null,
+      website: website,
+    });
+    logger.info(
+      { leadId: lead.id, found: !!dc },
+      "Dropcontact enrich result",
+    );
+    if (dc) {
+      const verified = await smtpVerify(dc.email);
+      if (verified) {
+        return {
+          email: verified,
+          source: "dropcontact",
+          note: `Email trouvé via Dropcontact (qualification: ${dc.emailQualification}) et vérifié par SMTP.`,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Run the full 4-stage enrichment pipeline for a single lead:
  *   1. Website analysis (summary / keywords / LCAP visibility)
  *   2. Hiring-signal detection
  *   3. Email sourcing + validation:
  *        - leads without a verified email → crawl the company site for a
- *          published address and confirm it via SMTP before adopting it.
+ *          published address → Hunter/Dropcontact cascade if crawl fails →
+ *          confirm via SMTP before adopting.
  *        - leads with an existing email → validate + SMTP verify it.
  *   4. LCAP compliance assessment.
  *
@@ -149,6 +273,7 @@ export async function enrichLead(leadId: number): Promise<EnrichResult | null> {
   let emailLocked = existing.emailLocked;
   let emailVerified = false;
   let emailNote = "Aucun email vérifiable trouvé — le lead reste bloqué.";
+  let emailSource: string | null = existing.emailSource ?? null;
   // An email published in plain view on the site satisfies the LCAP exemption.
   let emailVisibleOnSite = website.emailVisibleOnSite;
 
@@ -165,32 +290,52 @@ export async function enrichLead(leadId: number): Promise<EnrichResult | null> {
       emailLocked = false;
       emailVerified = true;
       emailVisibleOnSite = true;
+      emailSource = "website_crawl";
       emailNote = discovered.note;
-    } else if (existing.email) {
-      // Couldn't source a better address — fall back to validating whatever we
-      // already had, but only SMTP-deliverable addresses get promoted.
-      const syntax = await validateEmail(existing.email);
-      if (syntax.valid) {
-        const smtp = await verifyEmailSmtp(existing.email);
-        if (smtp.status === "deliverable") {
-          emailValid = true;
-          emailValidationReason = "Vérifié par SMTP (RCPT TO)";
-          emailStatus = "verified";
-          emailLocked = false;
-          emailVerified = true;
-          emailNote = "Email existant confirmé par SMTP.";
+    } else {
+      // Website crawl found nothing — try Hunter + Dropcontact cascade
+      logger.info(
+        { leadId: existing.id },
+        "Website crawl yielded no email — trying Hunter/Dropcontact cascade",
+      );
+      const cascade = await enrichFromCascade(existing);
+      if (cascade) {
+        finalEmail = cascade.email;
+        emailValid = true;
+        emailValidationReason = "Vérifié par SMTP (RCPT TO)";
+        emailStatus = "verified";
+        emailLocked = false;
+        emailVerified = true;
+        emailSource = cascade.source;
+        emailNote = cascade.note;
+      } else if (existing.email) {
+        // Couldn't source a better address — fall back to validating whatever we
+        // already had, but only SMTP-deliverable addresses get promoted.
+        const syntax = await validateEmail(existing.email);
+        if (syntax.valid) {
+          const smtp = await verifyEmailSmtp(existing.email);
+          if (smtp.status === "deliverable") {
+            emailValid = true;
+            emailValidationReason = "Vérifié par SMTP (RCPT TO)";
+            emailStatus = "verified";
+            emailLocked = false;
+            emailVerified = true;
+            emailNote = "Email existant confirmé par SMTP.";
+            // Keep existing emailSource or mark as pre_existing
+            if (!emailSource) emailSource = "pre_existing";
+          } else {
+            emailValidationReason = `Non vérifié par SMTP (${smtp.status})`;
+            emailStatus = "needs_enrichment";
+            emailNote = `Email existant non confirmé par SMTP (${smtp.reason}).`;
+          }
         } else {
-          emailValidationReason = `Non vérifié par SMTP (${smtp.status})`;
-          emailStatus = "needs_enrichment";
-          emailNote = `Email existant non confirmé par SMTP (${smtp.reason}).`;
+          emailValidationReason = syntax.reason;
+          emailStatus = "invalid";
+          emailNote = `Email existant invalide: ${syntax.reason}.`;
         }
       } else {
-        emailValidationReason = syntax.reason;
-        emailStatus = "invalid";
-        emailNote = `Email existant invalide: ${syntax.reason}.`;
+        emailStatus = "needs_enrichment";
       }
-    } else {
-      emailStatus = "needs_enrichment";
     }
   } else if (existing.email) {
     // Already verified previously — re-affirm validity without re-probing.
@@ -223,6 +368,7 @@ export async function enrichLead(leadId: number): Promise<EnrichResult | null> {
       emailValidationReason,
       emailStatus,
       emailLocked,
+      emailSource,
       isHiring: hiring.isHiring,
       intentSignal,
       websiteSummary: website.summary || null,
@@ -242,7 +388,7 @@ export async function enrichLead(leadId: number): Promise<EnrichResult | null> {
     type: "lead_enriched",
     description: `Enriched ${lead.firstName} ${lead.lastName} — ${
       lcap.compliant ? "LCAP OK" : "LCAP non conforme"
-    }${emailVerified ? " · email vérifié" : ""}${
+    }${emailVerified ? ` · email vérifié (${emailSource ?? "?"})` : ""}${
       hiring.isHiring ? " · hiring signal" : ""
     }`,
     leadName: `${lead.firstName} ${lead.lastName}`,

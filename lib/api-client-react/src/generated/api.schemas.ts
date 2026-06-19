@@ -43,7 +43,15 @@ export interface Lead {
   sourceUrl?: string | null;
   /** @nullable */
   emailStatus?: string | null;
+  /**
+   * Which enrichment step found the verified email: website_crawl | hunter_domain | hunter_finder | dropcontact
+
+   * @nullable
+   */
+  emailSource?: string | null;
   emailLocked?: boolean;
+  /** @nullable */
+  bouncedAt?: string | null;
   /** @nullable */
   scrapedAt?: string | null;
   /** @nullable */
