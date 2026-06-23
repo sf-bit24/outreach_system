@@ -38,6 +38,9 @@ function buildLeadContext(lead: Lead): string {
     lead.websiteKeywords && `Website keywords: ${sanitizeUntrusted(lead.websiteKeywords, 300)}`,
     lead.intentSignal && `Intent signal: ${sanitizeUntrusted(lead.intentSignal, 200)}`,
     lead.isHiring && "Currently hiring (growth phase)",
+    lead.hiringRoles && `Open roles: ${sanitizeUntrusted(lead.hiringRoles, 300)}`,
+    lead.techStack && `Tech stack: ${sanitizeUntrusted(lead.techStack, 300)}`,
+    lead.companyNews && `Recent company news: ${sanitizeUntrusted(lead.companyNews, 300)}`,
     lead.painPoint && `Likely pain point: ${sanitizeUntrusted(lead.painPoint, 200)}`,
   ].filter(Boolean);
   return parts.join("\n");
@@ -79,7 +82,8 @@ export async function generateHook(lead: Lead): Promise<string> {
 Règles:
 - Max 25 mots, une seule phrase.
 - Tutoiement interdit, vouvoiement obligatoire.
-- Doit faire référence à un fait spécifique sur l'entreprise ou le contact (signal d'intention, mot-clé du site, secteur, recrutement, etc.).
+- Priorise les signaux dans cet ordre : (1) actualité récente de l'entreprise si disponible → commence par "J'ai vu que..." ou "Félicitations pour...", (2) postes ouverts détectés → accroche sur le recrutement et la croissance, (3) stack technologique → accroche sur un outil spécifique, (4) signal d'intention ou mots-clés du site.
+- Ne jamais utiliser un signal générique quand un signal précis est disponible.
 - Pas de flatterie générique du type "j'admire votre travail".
 - Pas de point d'exclamation.
 Réponds uniquement avec l'accroche, sans guillemets ni préambule.

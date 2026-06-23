@@ -683,6 +683,12 @@ components:
           type: ["string", "null"]
         painPoint:
           type: ["string", "null"]
+        techStack:
+          type: ["string", "null"]
+        hiringRoles:
+          type: ["string", "null"]
+        companyNews:
+          type: ["string", "null"]
         lcapCompliant:
           type: ["boolean", "null"]
         lcapReason:
@@ -1005,6 +1011,10 @@ components:
           type: number
         openRate:
           type: number
+        verifiedLeads:
+          type: integer
+        pendingEnrichmentLeads:
+          type: integer
       required:
         - totalLeads
         - enrichedLeads
@@ -1015,6 +1025,8 @@ components:
         - activeCampaigns
         - replyRate
         - openRate
+        - verifiedLeads
+        - pendingEnrichmentLeads
 
     PipelineStage:
       type: object

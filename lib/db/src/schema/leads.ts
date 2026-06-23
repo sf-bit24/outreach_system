@@ -54,6 +54,9 @@ export const leadsTable = pgTable("leads", {
   unsubscribed: boolean("unsubscribed").notNull().default(false),
   unsubscribedAt: timestamp("unsubscribed_at", { withTimezone: true }),
   lastContactedAt: timestamp("last_contacted_at", { withTimezone: true }),
+  techStack: text("tech_stack"),
+  hiringRoles: text("hiring_roles"),
+  companyNews: text("company_news"),
   notes: text("notes"),
   campaignId: integer("campaign_id"),
   createdAt: timestamp("created_at", { withTimezone: true })

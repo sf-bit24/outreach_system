@@ -11,6 +11,9 @@ import {
 import { assessLcap, generateUnsubscribeToken } from "./lcap";
 import { hunterDomainSearch, hunterEmailFinder } from "./hunterClient";
 import { dropcontactEnrich } from "./dropcontactClient";
+import { fetchAndDetectTechStack } from "./techStackDetector";
+import { extractHiringRoles } from "./hiringExtractor";
+import { fetchNewsSignal } from "./newsSignalFetcher";
 import { logger } from "../lib/logger";
 
 export interface EnrichResult {
@@ -231,10 +234,14 @@ export async function enrichLead(leadId: number): Promise<EnrichResult | null> {
 
   logger.info({ leadId: existing.id }, "Starting enrichment pipeline");
 
-  const [websiteRes, hiringRes] = await Promise.allSettled([
-    analyzeWebsite(existing.website, existing.email ?? ""),
-    detectHiringSignal(existing.website),
-  ]);
+  const [websiteRes, hiringRes, techStackRes, hiringRolesRes, newsRes] =
+    await Promise.allSettled([
+      analyzeWebsite(existing.website, existing.email ?? ""),
+      detectHiringSignal(existing.website),
+      fetchAndDetectTechStack(existing.website),
+      extractHiringRoles(existing.website),
+      fetchNewsSignal(existing.company, existing.location),
+    ]);
 
   const website =
     websiteRes.status === "fulfilled"
@@ -253,6 +260,17 @@ export async function enrichLead(leadId: number): Promise<EnrichResult | null> {
       ? hiringRes.value
       : { isHiring: false, intentSignal: null };
 
+  const techStack =
+    techStackRes.status === "fulfilled" ? techStackRes.value : [];
+
+  const hiringRolesResult =
+    hiringRolesRes.status === "fulfilled"
+      ? hiringRolesRes.value
+      : { hiringRoles: null, isHiring: false };
+
+  const companyNews =
+    newsRes.status === "fulfilled" ? newsRes.value : null;
+
   if (websiteRes.status === "rejected") {
     logger.warn(
       { err: websiteRes.reason, leadId: existing.id },
@@ -265,6 +283,29 @@ export async function enrichLead(leadId: number): Promise<EnrichResult | null> {
       "Hiring detection failed",
     );
   }
+  if (techStackRes.status === "rejected") {
+    logger.warn(
+      { err: techStackRes.reason, leadId: existing.id },
+      "Tech stack detection failed",
+    );
+  }
+  if (hiringRolesRes.status === "rejected") {
+    logger.warn(
+      { err: hiringRolesRes.reason, leadId: existing.id },
+      "Hiring roles extraction failed",
+    );
+  }
+  if (newsRes.status === "rejected") {
+    logger.warn(
+      { err: newsRes.reason, leadId: existing.id },
+      "News signal fetch failed",
+    );
+  }
+
+  // Merge hiring signals: the roles extractor is more precise; fall back to
+  // the boolean detector when it finds something the extractor missed.
+  const isHiringFinal =
+    hiringRolesResult.isHiring || hiring.isHiring;
 
   // ─── Email resolution ───
   let finalEmail = existing.email;
@@ -370,8 +411,11 @@ export async function enrichLead(leadId: number): Promise<EnrichResult | null> {
       emailStatus,
       emailLocked,
       emailSource,
-      isHiring: hiring.isHiring,
+      isHiring: isHiringFinal,
       intentSignal,
+      techStack: techStack.length > 0 ? techStack.join(", ") : null,
+      hiringRoles: hiringRolesResult.hiringRoles,
+      companyNews,
       websiteSummary: website.summary || null,
       websiteKeywords:
         website.keywords.length > 0 ? website.keywords.join(", ") : null,

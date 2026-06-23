@@ -13,7 +13,7 @@ import {
   getGetDashboardStatsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, RefreshCw, Mail, Send, CheckCircle, XCircle, AlertCircle, Search, Zap } from "lucide-react";
+import { ArrowLeft, RefreshCw, Mail, Send, CheckCircle, XCircle, AlertCircle, Search, Zap, Cpu, Briefcase, Newspaper } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import StageBadge from "@/components/StageBadge";
@@ -353,6 +353,63 @@ export default function LeadDetail() {
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Tech Stack */}
+            {lead.techStack && (
+              <div>
+                <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                  <Cpu className="w-3 h-3" /> Stack technologique
+                </p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {lead.techStack.split(",").map((t) => t.trim()).filter(Boolean).map((tool) => {
+                    const color = /crm|hubspot|salesforce|pipedrive|zoho/i.test(tool)
+                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                      : /shopify|woo|magento|bigcommerce/i.test(tool)
+                      ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                      : /analytics|hotjar|clarity|mixpanel|heap|amplitude|segment|posthog/i.test(tool)
+                      ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                      : /wordpress|wix|squarespace|webflow|drupal|ghost/i.test(tool)
+                      ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                      : /mailchimp|klaviyo|activecampaign|brevo|convertkit|facebook|linkedin|google ads/i.test(tool)
+                      ? "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400"
+                      : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400";
+                    return (
+                      <span key={tool} className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${color}`}>
+                        {tool}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Hiring Roles */}
+            {lead.hiringRoles && (
+              <div>
+                <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                  <Briefcase className="w-3 h-3" /> Postes ouverts
+                </p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {lead.hiringRoles.split("·").map((r) => r.trim()).filter(Boolean).map((role) => (
+                    <span key={role} className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                      {role}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Company News */}
+            {lead.companyNews && (
+              <div>
+                <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                  <Newspaper className="w-3 h-3" /> Actualités récentes
+                </p>
+                <p className="text-sm text-foreground mt-1 leading-relaxed">
+                  {lead.companyNews}
+                </p>
               </div>
             )}
 

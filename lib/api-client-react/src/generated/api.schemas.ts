@@ -78,6 +78,12 @@ export interface Lead {
   /** @nullable */
   painPoint?: string | null;
   /** @nullable */
+  techStack?: string | null;
+  /** @nullable */
+  hiringRoles?: string | null;
+  /** @nullable */
+  companyNews?: string | null;
+  /** @nullable */
   lcapCompliant?: boolean | null;
   /** @nullable */
   lcapReason?: string | null;
@@ -272,6 +278,8 @@ export interface DashboardStats {
   activeCampaigns: number;
   replyRate: number;
   openRate: number;
+  verifiedLeads: number;
+  pendingEnrichmentLeads: number;
 }
 
 export interface PipelineStage {
