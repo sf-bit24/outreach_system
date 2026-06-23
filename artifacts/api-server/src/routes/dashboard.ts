@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, inArray } from "drizzle-orm";
 import { db, leadsTable, campaignsTable, emailsTable, activitiesTable } from "@workspace/db";
 import {
   GetDashboardStatsResponse,
@@ -49,6 +49,16 @@ router.get("/dashboard/stats", async (_req, res): Promise<void> => {
   const totalReplied = emailsReplied?.count ?? 0;
   const totalOpened = emailsOpened?.count ?? 0;
 
+  const [verifiedLeads] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(leadsTable)
+    .where(eq(leadsTable.emailStatus, "verified"));
+
+  const [pendingLeads] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(leadsTable)
+    .where(inArray(leadsTable.emailStatus, ["scraped", "needs_enrichment"]));
+
   const stats = {
     totalLeads: totals?.totalLeads ?? 0,
     enrichedLeads: enriched?.count ?? 0,
@@ -59,6 +69,8 @@ router.get("/dashboard/stats", async (_req, res): Promise<void> => {
     activeCampaigns: activeCampaigns?.count ?? 0,
     replyRate: totalSent > 0 ? Math.round((totalReplied / totalSent) * 1000) / 10 : 0,
     openRate: totalSent > 0 ? Math.round((totalOpened / totalSent) * 1000) / 10 : 0,
+    verifiedLeads: verifiedLeads?.count ?? 0,
+    pendingEnrichmentLeads: pendingLeads?.count ?? 0,
   };
 
   res.json(stats);

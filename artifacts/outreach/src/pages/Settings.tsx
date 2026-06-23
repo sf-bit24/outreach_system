@@ -327,28 +327,42 @@ export default function Settings() {
         </Field>
 
         {transportMode === "smtp" && (
-          <div className="grid grid-cols-2 gap-4 mt-3 border border-dashed border-border rounded-md p-4">
-            <Field label="Hôte SMTP">
-              <Input value={form.smtpHost} onChange={(e) => set("smtpHost", e.target.value)} placeholder="smtp.gmail.com" />
-            </Field>
-            <Field label="Port">
-              <Input type="number" value={form.smtpPort} onChange={(e) => set("smtpPort", Number(e.target.value))} placeholder="587" />
-            </Field>
-            <Field label="Utilisateur">
-              <Input value={form.smtpUser} onChange={(e) => set("smtpUser", e.target.value)} placeholder="votre@email.com" />
-            </Field>
-            <Field label={`Mot de passe${settings?.smtpConfigured ? " (● configuré)" : ""}`}>
-              <Input
-                type="password"
-                value={form.smtpPass}
-                onChange={(e) => set("smtpPass", e.target.value)}
-                placeholder={settings?.smtpConfigured ? "Laisser vide pour conserver" : "Mot de passe ou App Password"}
-              />
-            </Field>
-            <div className="col-span-2 text-xs text-muted-foreground">
-              💡 Google Workspace / Gmail : utilisez un <strong>App Password</strong> (Sécurité → Mots de passe des applications). Zoho / M365 : credentials normaux ou mot de passe d'application.
+          <>
+            {settings && !settings.smtpConfigured && (
+              <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-300 p-3 text-sm text-red-800">
+                <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-600" />
+                <div>
+                  <p className="font-semibold">Mot de passe SMTP manquant — aucun email ne peut être envoyé</p>
+                  <p className="text-xs text-red-700 mt-0.5">
+                    Saisissez le mot de passe ci-dessous et cliquez sur Enregistrer pour débloquer l'envoi.
+                  </p>
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4 mt-3 border border-dashed border-border rounded-md p-4">
+              <Field label="Hôte SMTP">
+                <Input value={form.smtpHost} onChange={(e) => set("smtpHost", e.target.value)} placeholder="smtp.gmail.com" />
+              </Field>
+              <Field label="Port">
+                <Input type="number" value={form.smtpPort} onChange={(e) => set("smtpPort", Number(e.target.value))} placeholder="587" />
+              </Field>
+              <Field label="Utilisateur">
+                <Input value={form.smtpUser} onChange={(e) => set("smtpUser", e.target.value)} placeholder="votre@email.com" />
+              </Field>
+              <Field label={`Mot de passe${settings?.smtpConfigured ? " (● configuré)" : " ⚠ requis"}`}>
+                <Input
+                  type="password"
+                  value={form.smtpPass}
+                  onChange={(e) => set("smtpPass", e.target.value)}
+                  placeholder={settings?.smtpConfigured ? "Laisser vide pour conserver" : "Mot de passe ou App Password"}
+                  className={!settings?.smtpConfigured ? "border-red-400 focus-visible:ring-red-400" : ""}
+                />
+              </Field>
+              <div className="col-span-2 text-xs text-muted-foreground">
+                💡 Google Workspace / Gmail : utilisez un <strong>App Password</strong> (Sécurité → Mots de passe des applications). Zoho / M365 : credentials normaux ou mot de passe d'application.
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {transportMode === "resend" && (

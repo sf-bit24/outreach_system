@@ -9,7 +9,7 @@
  */
 
 import cron from "node-cron";
-import { eq, and, isNull, inArray, sql } from "drizzle-orm";
+import { eq, and, isNull, inArray, or, sql } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -140,7 +140,10 @@ export async function runNightlyEnrichment(): Promise<{
     .from(leadsTable)
     .where(
       and(
-        eq(leadsTable.emailStatus, "needs_enrichment"),
+        or(
+          eq(leadsTable.emailStatus, "needs_enrichment"),
+          eq(leadsTable.emailStatus, "scraped"),
+        ),
         sql`${leadsTable.createdAt} < ${thirtyMinAgo}`,
       ),
     )

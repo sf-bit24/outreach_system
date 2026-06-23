@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, senderSettingsTable } from "@workspace/db";
 import { getOrCreateSenderSettings, computeWarmupLimit } from "../pipeline/queue";
 import { isResendConfigured, encryptSmtpPass, sendEmail, buildLcapEmail } from "../pipeline/sender";
-import { nextRunAt } from "../pipeline/autoPipeline";
+import { nextRunAt, runNightlyEnrichment, runNightlyAssign, runNightlyAcquisition } from "../pipeline/autoPipeline";
 
 const router: IRouter = Router();
 
@@ -218,6 +218,41 @@ router.get("/settings/pipeline-status", async (_req, res): Promise<void> => {
     lastAutoAcquisitionSummary: settings.lastAutoAcquisitionSummary ?? null,
     nextRunAt: nextRunAt(),
   });
+});
+
+/**
+ * POST /api/pipeline/trigger
+ * Déclenche manuellement une ou plusieurs phases du pipeline auto.
+ * Body: { phase: "acquire" | "enrich" | "assign" | "all" }
+ *
+ * Répond immédiatement avec { started: true } puis exécute en arrière-plan.
+ * Utiliser GET /api/settings/pipeline-status pour suivre la progression.
+ */
+router.post("/pipeline/trigger", (req, res): void => {
+  const phase = (req.body as { phase?: string }).phase ?? "all";
+  const logger = req.log;
+
+  // Fire and forget — respond immediately
+  res.json({ started: true, phase });
+
+  (async () => {
+    try {
+      if (phase === "acquire" || phase === "all") {
+        const r = await runNightlyAcquisition();
+        logger.info(r, "Manual trigger: acquisition done");
+      }
+      if (phase === "enrich" || phase === "all") {
+        const r = await runNightlyEnrichment();
+        logger.info(r, "Manual trigger: enrichment done");
+      }
+      if (phase === "assign" || phase === "all") {
+        const r = await runNightlyAssign();
+        logger.info(r, "Manual trigger: assign done");
+      }
+    } catch (err) {
+      logger.error({ err }, "Manual trigger: error in background phase");
+    }
+  })();
 });
 
 export default router;
